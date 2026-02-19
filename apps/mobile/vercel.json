@@ -1,5 +1,6 @@
 {
-  "buildCommand": "npm install --prefix ../.. && npx expo export --platform web",
+  "installCommand": "npm install --prefix ../..",
+  "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
