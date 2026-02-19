@@ -1,0 +1,5 @@
+{
+  "installCommand": "npm install --prefix ../..",
+  "outputDirectory": ".next",
+  "framework": "nextjs"
+}
