@@ -4,11 +4,19 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3000',
+  'https://bitebuddy-web.vercel.app',
 ];
+
+function isOriginAllowed(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow Vercel preview deployments
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  return false;
+}
 
 export function middleware(request: NextRequest) {
   const origin = request.headers.get('origin') ?? '';
-  const isAllowed = ALLOWED_ORIGINS.includes(origin);
+  const isAllowed = isOriginAllowed(origin);
 
   // Handle preflight OPTIONS requests
   if (request.method === 'OPTIONS') {
