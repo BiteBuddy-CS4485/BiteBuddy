@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet, apiPost } from '../../../lib/api';
+import { shadow } from '../../../lib/shadows';
 import { supabase } from '../../../lib/supabase';
 import { RestaurantCard } from '../../../components/RestaurantCard';
 import { MatchModal } from '../../../components/MatchModal';
@@ -184,11 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    ...shadow(0, 2, 6, 0.15),
   },
   nopeBtn: {
     backgroundColor: '#fff',

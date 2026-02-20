@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet } from '../../../lib/api';
+import { shadow } from '../../../lib/shadows';
 import type { SessionResults, SessionRestaurant, Match } from '@bitebuddy/shared';
 
 type MatchWithRestaurant = Match & { restaurant: SessionRestaurant };
@@ -201,11 +202,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    ...shadow(0, 2, 6, 0.08),
   },
   cardImage: {
     width: '100%',
