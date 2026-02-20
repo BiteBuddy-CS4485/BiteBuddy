@@ -14,9 +14,10 @@ interface Props {
   profile: Profile;
   action?: ActionProps;
   secondaryAction?: ActionProps;
+  statusLabel?: string;
 }
 
-export function FriendCard({ profile, action, secondaryAction }: Props) {
+export function FriendCard({ profile, action, secondaryAction, statusLabel }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.avatar}>
@@ -29,6 +30,11 @@ export function FriendCard({ profile, action, secondaryAction }: Props) {
         <Text style={styles.username}>@{profile.username}</Text>
       </View>
       <View style={styles.actions}>
+        {statusLabel && (
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusBadgeText}>{statusLabel}</Text>
+          </View>
+        )}
         {secondaryAction && (
           <TouchableOpacity
             style={[
@@ -114,6 +120,17 @@ const styles = StyleSheet.create({
   },
   btnText: {
     color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    color: '#888',
     fontSize: 13,
     fontWeight: '600',
   },
