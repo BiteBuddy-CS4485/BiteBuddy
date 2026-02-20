@@ -9,6 +9,7 @@ import {
   Linking,
 } from 'react-native';
 import type { SessionRestaurant } from '@bitebuddy/shared';
+import { shadow } from '../lib/shadows';
 
 interface Props {
   visible: boolean;
@@ -134,11 +135,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     maxWidth: 360,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
+    ...shadow(0, 8, 16, 0.25),
   },
   celebration: {
     fontSize: 48,

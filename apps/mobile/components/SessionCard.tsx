@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { Session } from '@bitebuddy/shared';
+import { shadow } from '../lib/shadows';
 
 interface Props {
   session: Session;
@@ -72,11 +73,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadow(0, 1, 4, 0.08),
   },
   header: {
     flexDirection: 'row',

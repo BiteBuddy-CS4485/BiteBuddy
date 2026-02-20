@@ -1,19 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { Profile } from '@bitebuddy/shared';
+import { shadow } from '../lib/shadows';
+
+interface ActionProps {
+  label: string;
+  onPress: () => void;
+  color?: string;
+  disabled?: boolean;
+}
 
 interface Props {
   profile: Profile;
-  action?: {
-    label: string;
-    onPress: () => void;
-    color?: string;
-  };
-  secondaryAction?: {
-    label: string;
-    onPress: () => void;
-    color?: string;
-  };
+  action?: ActionProps;
+  secondaryAction?: ActionProps;
 }
 
 export function FriendCard({ profile, action, secondaryAction }: Props) {
@@ -31,8 +31,14 @@ export function FriendCard({ profile, action, secondaryAction }: Props) {
       <View style={styles.actions}>
         {secondaryAction && (
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: secondaryAction.color ?? '#e0e0e0' }]}
+            style={[
+              styles.btn,
+              { backgroundColor: secondaryAction.color ?? '#e0e0e0' },
+              secondaryAction.disabled && styles.btnDisabled,
+            ]}
             onPress={secondaryAction.onPress}
+            disabled={secondaryAction.disabled}
+            activeOpacity={0.7}
           >
             <Text style={[styles.btnText, { color: secondaryAction.color ? '#fff' : '#333' }]}>
               {secondaryAction.label}
@@ -41,8 +47,14 @@ export function FriendCard({ profile, action, secondaryAction }: Props) {
         )}
         {action && (
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: action.color ?? '#FF6B35' }]}
+            style={[
+              styles.btn,
+              { backgroundColor: action.color ?? '#FF6B35' },
+              action.disabled && styles.btnDisabled,
+            ]}
             onPress={action.onPress}
+            disabled={action.disabled}
+            activeOpacity={0.7}
           >
             <Text style={styles.btnText}>{action.label}</Text>
           </TouchableOpacity>
@@ -60,11 +72,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 1,
+    ...shadow(0, 1, 3, 0.06),
   },
   avatar: {
     width: 44,
@@ -100,6 +108,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+  },
+  btnDisabled: {
+    opacity: 0.5,
   },
   btnText: {
     color: '#fff',

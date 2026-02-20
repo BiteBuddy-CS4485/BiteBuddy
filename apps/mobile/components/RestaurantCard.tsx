@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, Dimensions } from 'react-native';
 import type { SessionRestaurant } from '@bitebuddy/shared';
+import { shadow } from '../lib/shadows';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -92,11 +93,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    ...shadow(0, 4, 12, 0.15),
     maxHeight: SCREEN_HEIGHT * 0.68,
   },
   image: {

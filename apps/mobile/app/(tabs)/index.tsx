@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { apiGet } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { SessionCard } from '../../components/SessionCard';
+import { shadow } from '../../lib/shadows';
 import { CompactRestaurantCard } from '../../components/CompactRestaurantCard';
 import {
   CUISINE_CATEGORIES,
@@ -380,11 +381,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadow(0, 1, 4, 0.08),
   },
   matchImage: {
     width: '100%',
@@ -428,11 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B35',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    ...shadow(0, 2, 6, 0.25),
   },
   fabText: {
     color: '#fff',
