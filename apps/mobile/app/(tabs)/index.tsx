@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
-  RefreshControl, Image, Dimensions,
+  RefreshControl, Image, Dimensions, Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import { apiGet } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { SessionCard } from '../../components/SessionCard';
 import { shadow } from '../../lib/shadows';
 import { CompactRestaurantCard } from '../../components/CompactRestaurantCard';
@@ -53,6 +54,32 @@ export default function HomeScreen() {
       loadRecentMatches();
     }, [])
   );
+
+  // Realtime: listen for session invites targeting this user
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel('home-invites')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'session_members',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        () => {
+          loadSessions();
+          Alert.alert('New Session Invite', "You've been invited to a session!");
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
 
   // Fetch restaurants when location or cuisine changes
   useEffect(() => {

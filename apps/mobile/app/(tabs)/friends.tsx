@@ -12,6 +12,7 @@ import type { Profile, FriendWithProfile } from '@bitebuddy/shared';
 export default function FriendsScreen() {
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [requests, setRequests] = useState<FriendWithProfile[]>([]);
+  const [sentRequests, setSentRequests] = useState<FriendWithProfile[]>([]);
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -31,12 +32,14 @@ export default function FriendsScreen() {
 
   async function loadFriends() {
     try {
-      const [friendsData, requestsData] = await Promise.all([
+      const [friendsData, requestsData, sentData] = await Promise.all([
         apiGet<FriendWithProfile[]>('/api/friends'),
         apiGet<FriendWithProfile[]>('/api/friends/requests'),
+        apiGet<FriendWithProfile[]>('/api/friends/requests/sent'),
       ]);
       setFriends(friendsData ?? []);
       setRequests(requestsData ?? []);
+      setSentRequests(sentData ?? []);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load friends');
     } finally {
@@ -128,6 +131,7 @@ export default function FriendsScreen() {
 
   const sections = [
     ...(requests.length > 0 ? [{ title: 'Pending Requests', data: requests, type: 'request' as const }] : []),
+    ...(sentRequests.length > 0 ? [{ title: 'Sent Requests', data: sentRequests, type: 'sent' as const }] : []),
     { title: 'Friends', data: friends, type: 'friend' as const },
   ];
 
@@ -209,7 +213,7 @@ export default function FriendsScreen() {
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHeader}>{section.title}</Text>
-              {section.type === 'request' && (
+              {(section.type === 'request' || section.type === 'sent') && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{section.data.length}</Text>
                 </View>
@@ -232,6 +236,8 @@ export default function FriendsScreen() {
                   disabled: respondingTo !== null,
                 }}
               />
+            ) : section.type === 'sent' ? (
+              <FriendCard profile={item.profile} statusLabel="Pending" />
             ) : (
               <FriendCard profile={item.profile} />
             )
