@@ -13,6 +13,7 @@ interface AuthState {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  needsProfileSetup: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -131,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
+        needsProfileSetup: !!profile && profile.username.startsWith('user_'),
         signIn,
         signUp,
         signInWithGoogle,

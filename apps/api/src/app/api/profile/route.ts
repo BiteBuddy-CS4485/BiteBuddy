@@ -9,6 +9,20 @@ export async function PUT(request: NextRequest) {
 
   const body: UpdateProfileRequest = await request.json();
   const updates: Record<string, string | undefined> = {};
+
+  if (body.username !== undefined) {
+    // Only allow setting username if current one is a placeholder
+    const { data: currentProfile } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .single();
+
+    if (currentProfile && currentProfile.username.startsWith('user_')) {
+      updates.username = body.username;
+    }
+  }
+
   if (body.display_name !== undefined) updates.display_name = body.display_name;
   if (body.avatar_url !== undefined) updates.avatar_url = body.avatar_url;
 
