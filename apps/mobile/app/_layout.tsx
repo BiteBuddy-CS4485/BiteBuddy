@@ -3,7 +3,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 
 function AuthGate() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsProfileSetup } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -13,10 +13,14 @@ function AuthGate() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
+    } else if (session && needsProfileSetup) {
+      if (segments.join('/') !== '(auth)/profile-setup') {
+        router.replace('/(auth)/profile-setup');
+      }
     } else if (session && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments]);
+  }, [session, loading, needsProfileSetup, segments]);
 
   if (loading) return null;
 

@@ -21,6 +21,7 @@ export interface AuthResponse {
 
 // Profile
 export interface UpdateProfileRequest {
+  username?: string;
   display_name?: string;
   avatar_url?: string;
 }
