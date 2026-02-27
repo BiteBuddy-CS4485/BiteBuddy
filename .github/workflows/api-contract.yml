@@ -2,6 +2,10 @@ name: API Contract
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
 
 jobs:
   contract:
@@ -9,6 +13,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -20,4 +27,31 @@ jobs:
         run: npm ci
 
       - name: Verify API contract
+        id: initial_check
+        continue-on-error: true
         run: npm run api:contract:check
+
+      - name: Auto-fix API contract artifacts
+        if: steps.initial_check.outcome == 'failure' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          npm run api:contract:generate
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- docs/api-contract/openapi.json apps/api/public/openapi.json; then
+            echo "No generated artifact changes detected."
+            exit 0
+          fi
+          git add docs/api-contract/openapi.json apps/api/public/openapi.json
+          git commit -m "chore(contract): auto-fix OpenAPI artifacts"
+          git push
+
+      - name: Re-run API contract check
+        if: steps.initial_check.outcome == 'failure' && github.event.pull_request.head.repo.full_name == github.repository
+        run: npm run api:contract:check
+
+      - name: Fail fork PRs that require autofix
+        if: steps.initial_check.outcome == 'failure' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "Contract check failed on a fork PR and cannot be auto-pushed."
+          echo "Please run: npm run api:contract:generate and commit the updated artifacts."
+          exit 1
