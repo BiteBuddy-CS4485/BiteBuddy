@@ -21,8 +21,7 @@ npm run api:contract:check
 
 1. Add or change a route handler in `apps/api/src/app/api/**/route.ts`.
 2. Update `scripts/openapi/contract-definitions.cjs` with the endpoint contract.
-3. Run `npm run api:contract:generate`.
-4. Commit route changes and both generated JSON files.
+3. Open a PR. CI will auto-fix generated OpenAPI artifacts when needed.
 
 `api:contract:check` fails if:
 - A route exists without a matching contract definition.
@@ -31,7 +30,6 @@ npm run api:contract:check
 
 ## CI Behavior
 
-- PRs run `api:contract:check` and fail when the contract is out of sync.
-- Pushes to `main` run an auto-update workflow that regenerates and commits:
-  - `docs/api-contract/openapi.json`
-  - `apps/api/public/openapi.json`
+- PRs run `api:contract:check`.
+- If artifacts are stale, CI runs `api:contract:generate`, commits the generated files to the PR branch, and re-runs the check.
+- Fork PRs cannot be auto-pushed by CI, so those contributors must generate and commit artifacts manually.
