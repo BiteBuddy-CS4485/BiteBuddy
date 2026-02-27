@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BiteBuddy — System Architecture</title>
@@ -625,7 +625,7 @@
   <div class="row row-3" style="margin-bottom:2px;">
     <div class="node backend" style="animation-delay:0.15s">
       <div class="node-label">Next.js · Vercel</div>
-      <div class="node-title">Auth & Users</div>
+      <div class="node-title">Auth &amp; Users</div>
       <div class="node-sub">Serverless Functions</div>
       <div class="node-tags">
         <span class="tag">POST /auth/sync</span>
@@ -636,7 +636,7 @@
     </div>
     <div class="node backend" style="animation-delay:0.2s">
       <div class="node-label">Next.js · Vercel</div>
-      <div class="node-title">Sessions & Restaurants</div>
+      <div class="node-title">Sessions &amp; Restaurants</div>
       <div class="node-sub">Core Business Logic</div>
       <div class="node-tags">
         <span class="tag">POST /sessions</span>
@@ -647,7 +647,7 @@
     </div>
     <div class="node backend" style="animation-delay:0.25s">
       <div class="node-label">Next.js · Vercel</div>
-      <div class="node-title">Swipe & Match</div>
+      <div class="node-title">Swipe &amp; Match</div>
       <div class="node-sub">Vote + Detection Engine</div>
       <div class="node-tags">
         <span class="tag">POST /swipes</span>
@@ -669,17 +669,12 @@
     <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding: 6px 0;">
       <div style="display:flex; align-items:center; width:100%; gap:0;">
         <div style="flex:1; height:1px; background: linear-gradient(to left, var(--external), transparent);"></div>
-        <div style="font-family:Space Mono; font-size:9px; color:var(--external); padding:0 8px; white-space:nowrap;">Yelp Fusion API</div>
+        <div style="font-family:Space Mono; font-size:9px; color:var(--external); padding:0 8px; white-space:nowrap;">Googel Places API</div>
         <div style="width:6px;height:6px;border-radius:50%;background:var(--external);opacity:0.5;"></div>
         <div style="width:40px; height:1px; background: var(--external); opacity:0.3;"></div>
       </div>
       <div class="conn-vert"></div>
-      <div style="display:flex; align-items:center; width:100%; gap:0;">
-        <div style="flex:1; height:1px; background: linear-gradient(to left, var(--external), transparent);"></div>
-        <div style="font-family:Space Mono; font-size:9px; color:var(--external); padding:0 8px; white-space:nowrap;">Google Maps API</div>
-        <div style="width:6px;height:6px;border-radius:50%;background:var(--external);opacity:0.5;"></div>
-        <div style="width:40px; height:1px; background: var(--external); opacity:0.3;"></div>
-      </div>
+      
     </div>
 
     <div class="main-connector">
@@ -697,7 +692,7 @@
       <div class="node-title">3rd Party APIs</div>
       <div class="node-sub">Called server-side only</div>
       <div class="node-tags">
-        <span class="tag">Yelp Fusion</span>
+        
         <span class="tag">Google Maps</span>
         <span class="tag">Geocoding</span>
         <span class="tag">Places Search</span>
@@ -723,7 +718,7 @@
   </div>
 
   <!-- LAYER 3: Supabase -->
-  <div class="section-title">Data & Realtime Layer</div>
+  <div class="section-title">Data &amp; Realtime Layer</div>
   <div class="row row-4" style="margin-bottom:2px;">
     <div class="node db" style="animation-delay:0.35s">
       <div class="node-label">Supabase</div>
@@ -786,7 +781,7 @@
 
       <div class="flow-card" style="animation-delay:0.6s">
         <div class="flow-number">02</div>
-        <div class="flow-title">👆 Swipe & Match Detection</div>
+        <div class="flow-title">👆 Swipe &amp; Match Detection</div>
         <ul class="flow-steps">
           <li>User swipes right → POST /swipes recorded in DB</li>
           <li>Backend runs match query: COUNT(likes) = total_participants</li>
@@ -876,5 +871,6 @@
   </div>
 
 </div>
-</body>
-</html>
+
+
+</body></html>
