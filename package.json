@@ -2,6 +2,10 @@
   "name": "bitebuddy",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "api:contract:generate": "node scripts/generate-openapi.cjs",
+    "api:contract:check": "node scripts/generate-openapi.cjs --check"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
