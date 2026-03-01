@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
 
   const category = CUISINE_CATEGORIES.find(c => c.key === cuisine);
   const includedTypes = category ? [...category.googlePlacesTypes] : ['restaurant'];
+  const { origin } = new URL(request.url);
 
   try {
     const restaurants = await searchRestaurants({
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
       longitude,
       radius,
       includedTypes,
+      baseUrl: origin,
     });
 
     discoverCache.set(cacheKey, { data: restaurants, timestamp: Date.now() });

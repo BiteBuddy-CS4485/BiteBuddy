@@ -35,11 +35,13 @@ export async function POST(
 
   let businesses;
   try {
+    const { origin } = new URL(request.url);
     businesses = await searchRestaurants({
       latitude: session.latitude,
       longitude: session.longitude,
       radius: session.radius_meters,
       priceLevels,
+      baseUrl: origin,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Google Places API error';
