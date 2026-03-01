@@ -7,7 +7,6 @@ interface PlacesSearchParams {
   priceLevels?: string[];
   limit?: number;
   includedTypes?: string[];
-  baseUrl: string;
 }
 
 export interface PlaceBusiness {
@@ -82,7 +81,7 @@ export async function searchRestaurants(params: PlacesSearchParams): Promise<Pla
         'places.priceLevel',
         'places.primaryType',
         'places.types',
-        'places.photos',
+
         'places.nationalPhoneNumber',
         'places.googleMapsUri',
       ].join(','),
@@ -99,12 +98,7 @@ export async function searchRestaurants(params: PlacesSearchParams): Promise<Pla
   const places = data.places ?? [];
 
   return places.map((place: any) => {
-    // Build a photo URL if available
-    let imageUrl: string | null = null;
-    if (place.photos?.length > 0) {
-      const photoName = place.photos[0].name;
-      imageUrl = `${params.baseUrl}/api/photo?ref=${encodeURIComponent(photoName)}&maxWidthPx=800`;
-    }
+    const imageUrl: string | null = null;
 
     // Map types to category-like objects
     const categories = (place.types ?? [])
