@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
 
   const category = CUISINE_CATEGORIES.find(c => c.key === cuisine);
   const includedTypes = category ? [...category.googlePlacesTypes] : ['restaurant'];
-
   try {
     const restaurants = await searchRestaurants({
       latitude,
