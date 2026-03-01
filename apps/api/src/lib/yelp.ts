@@ -102,7 +102,8 @@ export async function searchRestaurants(params: PlacesSearchParams): Promise<Pla
     let imageUrl: string | null = null;
     if (place.photos?.length > 0) {
       const photoName = place.photos[0].name;
-      imageUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&key=${process.env.GOOGLE_PLACES_API_KEY}`;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      imageUrl = `${baseUrl}/api/photo?ref=${encodeURIComponent(photoName)}&maxWidthPx=800`;
     }
 
     // Map types to category-like objects
