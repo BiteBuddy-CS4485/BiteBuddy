@@ -42,3 +42,54 @@ export async function apiPut<T = unknown>(path: string, body?: unknown): Promise
   if (!res.ok) throw new Error(json.error ?? 'Request failed');
   return json.data;
 }
+
+interface Restaurant {
+  place_id: string;
+  name: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  rating?: number;
+  vicinity?: string;
+}
+
+interface DiscoverResponse {
+  centroid: { lat: number; lng: number };
+  search_radius: number;
+  restaurant_count: number;
+  restaurants: Restaurant[];
+}
+
+/**
+ * Join a session with user's current location
+ */
+export async function joinSessionWithLocation(
+  sessionId: string,
+  latitude: number,
+  longitude: number
+): Promise<void> {
+  await apiPost(`/api/sessions/${sessionId}/join`, { latitude, longitude });
+}
+
+/**
+ * Discover restaurants for a session based on all users' locations
+ */
+export async function discoverRestaurants(
+  sessionId: string,
+  options?: {
+    search_radius?: number; // km
+    dietary_restrictions?: string[];
+    preferences?: {
+      minRating?: number;
+    };
+  }
+): Promise<DiscoverResponse> {
+  return apiPost(`/api/sessions/${sessionId}/discover`, {
+    search_radius: options?.search_radius ?? 1,
+    dietary_restrictions: options?.dietary_restrictions ?? [],
+    preferences: options?.preferences ?? {},
+  });
+}

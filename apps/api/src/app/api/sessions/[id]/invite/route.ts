@@ -12,6 +12,8 @@ export async function POST(
   const { id } = await params;
 
   const body: InviteFriendsRequest = await request.json();
+  console.log('invite body:', JSON.stringify(body));  // ADD THIS
+  console.log('invite session id:', id);              // ADD THIS
 
   if (!body.user_ids?.length) {
     return NextResponse.json({ error: 'user_ids are required' }, { status: 400 });

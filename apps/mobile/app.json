@@ -33,6 +33,11 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single"
+    },
+    "extra": {
+      "EXPO_PUBLIC_SUPABASE_URL": "https://bite-buddy-api-eight.vercel.app/",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_bimw7pv-TWh0Eljgtf7UUg_lPCUTOWD",
+      "EXPO_PUBLIC_API_URL": "http://localhost:3000"
     }
   }
 }
