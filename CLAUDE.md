@@ -12,7 +12,7 @@ BiteBuddy is a group dining decision app — friends swipe on restaurants togeth
 - **Mobile** (`apps/mobile`): Expo 54, React Native 0.81, Expo Router, TypeScript
 - **Shared** (`packages/shared`): TypeScript types shared between API and mobile
 - **Database**: Supabase (PostgreSQL with RLS, Realtime, Auth)
-- **Restaurant Data**: Google Places API (New)
+- **Restaurant Data**: TBD (no provider currently configured)
 
 ## Common Commands
 
@@ -34,7 +34,6 @@ npx expo install <pkg> --project apps/mobile # Install Expo-compatible packages
 **`apps/api/.env.local`** (server-only):
 - `SUPABASE_URL` — Supabase project URL
 - `SUPABASE_ANON_KEY` — Supabase anon/public key
-- `GOOGLE_PLACES_API_KEY` — Google Places API key
 
 **`apps/mobile/.env`** (client-side, EXPO_PUBLIC_ prefix):
 - `EXPO_PUBLIC_SUPABASE_URL`
@@ -46,7 +45,6 @@ npx expo install <pkg> --project apps/mobile # Install Expo-compatible packages
 ### API (`apps/api/src/`)
 - `lib/auth.ts` — `getAuthenticatedClient(request)` extracts Bearer JWT, returns `{ supabase, user }` or 401. Every protected route starts with this.
 - `lib/supabase.ts` — creates Supabase client with user's JWT (respects RLS)
-- `lib/yelp.ts` — Google Places API client for restaurant search (file kept as yelp.ts for now)
 - Routes in `app/api/`: auth (signup/login/me/logout), profile, friends (list/requests/request/respond/search), sessions (CRUD/invite/join/start/swipe/restaurants/results)
 
 ### Mobile (`apps/mobile/`)
@@ -72,4 +70,4 @@ npx expo install <pkg> --project apps/mobile # Install Expo-compatible packages
 - Auth: mobile calls Supabase Auth directly, passes JWT to API via Authorization header
 - Match detection: PostgreSQL trigger (not app code) — atomic, no race conditions
 - Realtime: mobile subscribes directly to Supabase Realtime (lobby, swipe progress, matches)
-- Restaurant data: denormalized from Google Places into session_restaurants per session
+- Restaurant data: denormalized into session_restaurants per session

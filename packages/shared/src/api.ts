@@ -79,19 +79,19 @@ export interface SessionResults {
 
 // Cuisine categories for discovery / filtering
 export const CUISINE_CATEGORIES = [
-  { key: 'all', label: 'All', googlePlacesTypes: ['restaurant'] },
-  { key: 'italian', label: 'Italian', googlePlacesTypes: ['italian_restaurant'] },
-  { key: 'mexican', label: 'Mexican', googlePlacesTypes: ['mexican_restaurant'] },
-  { key: 'japanese', label: 'Japanese', googlePlacesTypes: ['japanese_restaurant'] },
-  { key: 'chinese', label: 'Chinese', googlePlacesTypes: ['chinese_restaurant'] },
-  { key: 'thai', label: 'Thai', googlePlacesTypes: ['thai_restaurant'] },
-  { key: 'indian', label: 'Indian', googlePlacesTypes: ['indian_restaurant'] },
-  { key: 'american', label: 'American', googlePlacesTypes: ['american_restaurant'] },
-  { key: 'pizza', label: 'Pizza', googlePlacesTypes: ['pizza_restaurant'] },
-  { key: 'seafood', label: 'Seafood', googlePlacesTypes: ['seafood_restaurant'] },
-  { key: 'korean', label: 'Korean', googlePlacesTypes: ['korean_restaurant'] },
-  { key: 'burgers', label: 'Burgers', googlePlacesTypes: ['hamburger_restaurant'] },
-  { key: 'coffee', label: 'Coffee', googlePlacesTypes: ['coffee_shop', 'cafe'] },
+  { key: 'all', label: 'All' },
+  { key: 'italian', label: 'Italian' },
+  { key: 'mexican', label: 'Mexican' },
+  { key: 'japanese', label: 'Japanese' },
+  { key: 'chinese', label: 'Chinese' },
+  { key: 'thai', label: 'Thai' },
+  { key: 'indian', label: 'Indian' },
+  { key: 'american', label: 'American' },
+  { key: 'pizza', label: 'Pizza' },
+  { key: 'seafood', label: 'Seafood' },
+  { key: 'korean', label: 'Korean' },
+  { key: 'burgers', label: 'Burgers' },
+  { key: 'coffee', label: 'Coffee' },
 ] as const;
 
 export type CuisineKey = (typeof CUISINE_CATEGORIES)[number]['key'];
