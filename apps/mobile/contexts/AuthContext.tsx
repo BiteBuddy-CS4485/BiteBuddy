@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AppState } from 'react-native';
-import type { Session, User } from '@supabase/supabase-js';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import { supabase } from '../lib/supabase';
-import type { Profile } from '@bitebuddy/shared';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { AppState } from "react-native";
+import type { Session, User } from "@supabase/supabase-js";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
+import { supabase } from "../lib/supabase";
+import type { Profile } from "@bitebuddy/shared";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -17,6 +17,8 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -30,11 +32,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function fetchProfile(userId: string) {
     const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
       .single();
     if (data) setProfile(data as Profile);
+  }
+
+  async function applySessionFromUrl(url: string) {
+    const hashIndex = url.indexOf("#");
+    const queryIndex = url.indexOf("?");
+
+    const paramString =
+      hashIndex !== -1
+        ? url.substring(hashIndex + 1)
+        : queryIndex !== -1
+          ? url.substring(queryIndex + 1)
+          : "";
+
+    if (!paramString) return;
+
+    const params = new URLSearchParams(paramString);
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+
+    if (accessToken && refreshToken) {
+      await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+    }
   }
 
   useEffect(() => {
@@ -44,21 +71,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => {
-        setSession(s);
-        if (s) fetchProfile(s.user.id);
-        else setProfile(null);
-      }
-    );
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) fetchProfile(s.user.id);
+      else setProfile(null);
+    });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleDeepLink = async (url: string) => {
+      try {
+        await applySessionFromUrl(url);
+      } catch {
+        // Ignore malformed URLs and let normal auth flow continue.
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) void handleDeepLink(url);
+    });
+
+    const sub = Linking.addEventListener("url", ({ url }) => {
+      void handleDeepLink(url);
+    });
+
+    return () => sub.remove();
+  }, []);
+
   // Auto-refresh tokens when app comes to foreground
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
         supabase.auth.startAutoRefresh();
       } else {
         supabase.auth.stopAutoRefresh();
@@ -68,7 +115,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
   }
 
@@ -82,9 +132,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signInWithGoogle() {
-    const redirectTo = Linking.createURL('/');
+    const redirectTo = Linking.createURL("/");
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
         redirectTo,
         skipBrowserRedirect: true,
@@ -92,25 +142,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     if (error) throw error;
     if (data.url) {
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type === 'success' && result.url) {
-        // Extract tokens from the URL fragment
-        // The URL looks like: bitebuddy:///--/...#access_token=XXX&refresh_token=YYY
-        const hashIndex = result.url.indexOf('#');
-        if (hashIndex !== -1) {
-          const fragment = result.url.substring(hashIndex + 1);
-          const params = new URLSearchParams(fragment);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-          }
-        }
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo,
+      );
+      if (result.type === "success" && result.url) {
+        await applySessionFromUrl(result.url);
       }
     }
+  }
+
+  async function requestPasswordReset(email: string) {
+    const redirectTo = Linking.createURL("/(auth)/reset-password");
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+    if (error) throw error;
+  }
+
+  async function updatePassword(newPassword: string) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
   }
 
   async function refreshProfile() {
@@ -132,10 +184,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: session?.user ?? null,
         profile,
         loading,
-        needsProfileSetup: !!profile && profile.username.startsWith('user_'),
+        needsProfileSetup: !!profile && profile.username.startsWith("user_"),
         signIn,
         signUp,
         signInWithGoogle,
+        requestPasswordReset,
+        updatePassword,
         signOut,
         refreshProfile,
       }}
@@ -147,6 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
