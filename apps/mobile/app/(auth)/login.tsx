@@ -1,30 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform,
-} from 'react-native';
-import { Link } from 'expo-router';
-import { useAuth } from '../../contexts/AuthContext';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { Link } from "expo-router";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function LoginScreen() {
   const { signIn, signInWithGoogle } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   async function handleLogin() {
-    setError('');
+    setError("");
     if (!email || !password) {
-      setError('Please fill in all fields');
+      setError("Please fill in all fields");
       return;
     }
     setLoading(true);
     try {
       await signIn(email.trim(), password);
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
@@ -33,7 +38,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.inner}>
         <Text style={styles.title}>BiteBuddy</Text>
@@ -63,13 +68,19 @@ export default function LoginScreen() {
           secureTextEntry
         />
 
+        <Link href="/(auth)/forgot-password" asChild>
+          <TouchableOpacity style={styles.forgotLink}>
+            <Text style={styles.forgotLinkText}>Forgot your password?</Text>
+          </TouchableOpacity>
+        </Link>
+
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading || googleLoading}
         >
           <Text style={styles.buttonText}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? "Signing in..." : "Sign In"}
           </Text>
         </TouchableOpacity>
 
@@ -82,12 +93,12 @@ export default function LoginScreen() {
         <TouchableOpacity
           style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
           onPress={async () => {
-            setError('');
+            setError("");
             setGoogleLoading(true);
             try {
               await signInWithGoogle();
             } catch (err: any) {
-              setError(err.message || 'Google sign-in failed');
+              setError(err.message || "Google sign-in failed");
             } finally {
               setGoogleLoading(false);
             }
@@ -95,14 +106,15 @@ export default function LoginScreen() {
           disabled={loading || googleLoading}
         >
           <Text style={styles.googleButtonText}>
-            {googleLoading ? 'Connecting...' : 'Continue with Google'}
+            {googleLoading ? "Connecting..." : "Continue with Google"}
           </Text>
         </TouchableOpacity>
 
         <Link href="/(auth)/signup" asChild>
           <TouchableOpacity style={styles.link}>
             <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
+              Don't have an account?{" "}
+              <Text style={styles.linkBold}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
         </Link>
@@ -114,101 +126,110 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   inner: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     paddingHorizontal: 32,
   },
   title: {
     fontSize: 36,
-    fontWeight: '800',
-    color: '#FF6B35',
-    textAlign: 'center',
+    fontWeight: "800",
+    color: "#FF6B35",
+    textAlign: "center",
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#888',
-    textAlign: 'center',
+    color: "#888",
+    textAlign: "center",
     marginBottom: 40,
   },
   input: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     marginBottom: 12,
-    color: '#1a1a1a',
+    color: "#1a1a1a",
   },
   button: {
-    backgroundColor: '#FF6B35',
+    backgroundColor: "#FF6B35",
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
+  },
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginBottom: 8,
+  },
+  forgotLinkText: {
+    color: "#FF6B35",
+    fontSize: 14,
+    fontWeight: "600",
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   link: {
     marginTop: 20,
-    alignItems: 'center',
+    alignItems: "center",
   },
   linkText: {
     fontSize: 15,
-    color: '#666',
+    color: "#666",
   },
   linkBold: {
-    color: '#FF6B35',
-    fontWeight: '600',
+    color: "#FF6B35",
+    fontWeight: "600",
   },
   divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: "#ddd",
   },
   dividerText: {
     marginHorizontal: 12,
-    color: '#999',
+    color: "#999",
     fontSize: 14,
   },
   googleButton: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1.5,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   googleButtonText: {
-    color: '#333',
+    color: "#333",
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   errorBox: {
-    backgroundColor: '#FFE8E0',
+    backgroundColor: "#FFE8E0",
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FF6B35',
+    borderColor: "#FF6B35",
   },
   errorText: {
-    color: '#CC3300',
+    color: "#CC3300",
     fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500',
+    textAlign: "center",
+    fontWeight: "500",
   },
 });
