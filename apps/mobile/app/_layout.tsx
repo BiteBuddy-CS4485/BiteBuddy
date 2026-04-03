@@ -15,7 +15,7 @@ function AuthGate() {
     const inResetPassword = currentRoute === "(auth)/reset-password";
 
     if (!session && !inAuthGroup) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/index");
     } else if (
       session &&
       needsProfileSetup &&

@@ -16,6 +16,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 22 }}>🏠</Text>,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -29,14 +30,18 @@ export default function TabLayout() {
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 22 }}>📋</Text>,
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 22 }}>📅</Text>,
         }}
+      />
+      <Tabs.Screen
+        name="sessions"
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 22 }}>👤</Text>,
+          title: 'Settings',
+          href: null,
         }}
       />
     </Tabs>

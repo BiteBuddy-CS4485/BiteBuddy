@@ -56,16 +56,13 @@ export default function FriendsScreen() {
   function onSearchChange(text: string) {
     setSearchQuery(text);
     setSearchError('');
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
     if (text.length < 2) {
       setSearchResults([]);
       setHasSearched(false);
       setSearching(false);
       return;
     }
-
     setSearching(true);
     debounceRef.current = setTimeout(() => {
       performSearch(text);
@@ -92,7 +89,6 @@ export default function FriendsScreen() {
     try {
       await apiPost('/api/friends/request', { username });
       Alert.alert('Request Sent!', `Friend request sent to @${username}`);
-      // Remove from search results so they can't send again
       setSearchResults(prev => prev.filter(p => p.username !== username));
     } catch (err: any) {
       Alert.alert('Could not send request', err.message || 'Something went wrong');
@@ -106,10 +102,6 @@ export default function FriendsScreen() {
     setRespondingTo(friendshipId);
     try {
       await apiPost('/api/friends/respond', { friendship_id: friendshipId, action });
-      Alert.alert(
-        action === 'accept' ? 'Friend Added!' : 'Request Declined',
-        action === 'accept' ? 'You are now friends!' : 'Friend request declined.',
-      );
       await loadFriends();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to respond');
@@ -129,22 +121,22 @@ export default function FriendsScreen() {
     return <ActivityIndicator size="large" color="#FF6B35" style={styles.loader} />;
   }
 
-  const sections = [
-    ...(requests.length > 0 ? [{ title: 'Pending Requests', data: requests, type: 'request' as const }] : []),
-    ...(sentRequests.length > 0 ? [{ title: 'Sent Requests', data: sentRequests, type: 'sent' as const }] : []),
-    { title: 'Friends', data: friends, type: 'friend' as const },
-  ];
-
   const showSearchResults = searchQuery.length >= 2;
+  const sections = [
+    ...(requests.length > 0 ? [{ title: `PENDING REQUESTS (${requests.length})`, data: requests, type: 'request' as const }] : []),
+    ...(sentRequests.length > 0 ? [{ title: `SENT REQUESTS (${sentRequests.length})`, data: sentRequests, type: 'sent' as const }] : []),
+    ...(friends.length > 0 ? [{ title: `MY FRIENDS (${friends.length})`, data: friends, type: 'friend' as const }] : []),
+  ];
 
   return (
     <View style={styles.container}>
       {/* Search Bar */}
       <View style={styles.searchBar}>
+        <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search users by username..."
-          placeholderTextColor="#999"
+          placeholder="Search by username or name"
+          placeholderTextColor="#bbb"
           value={searchQuery}
           onChangeText={onSearchChange}
           autoCapitalize="none"
@@ -154,7 +146,7 @@ export default function FriendsScreen() {
           <ActivityIndicator size="small" color="#FF6B35" />
         ) : searchQuery.length > 0 ? (
           <TouchableOpacity onPress={clearSearch} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>Clear</Text>
+            <Text style={styles.clearBtnText}>✕</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -176,8 +168,8 @@ export default function FriendsScreen() {
             </View>
           ) : searchResults.length === 0 && hasSearched ? (
             <View style={styles.statusMessage}>
-              <Text style={styles.emptyText}>No users found for "{searchQuery}"</Text>
-              <Text style={styles.hintText}>Make sure the username is spelled correctly</Text>
+              <Text style={styles.emptyTitle}>No users found</Text>
+              <Text style={styles.hintText}>for "{searchQuery}"</Text>
             </View>
           ) : (
             <FlatList
@@ -187,7 +179,7 @@ export default function FriendsScreen() {
                 <FriendCard
                   profile={item}
                   action={{
-                    label: sendingTo === item.username ? 'Sending...' : 'Add',
+                    label: sendingTo === item.username ? 'Sending...' : '+ Add',
                     onPress: () => sendRequest(item.username),
                     disabled: sendingTo !== null,
                   }}
@@ -195,12 +187,28 @@ export default function FriendsScreen() {
               )}
               contentContainerStyle={styles.list}
               ListHeaderComponent={
-                <Text style={styles.resultCount}>
-                  {searchResults.length} user{searchResults.length !== 1 ? 's' : ''} found
+                <Text style={styles.resultLabel}>
+                  RESULTS FOR '{searchQuery.toUpperCase()}'
                 </Text>
               }
             />
           )}
+        </View>
+      ) : friends.length === 0 && requests.length === 0 ? (
+        // Empty state
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconWrap}>
+            <Text style={styles.emptyIconText}>👤+</Text>
+          </View>
+          <Text style={styles.emptyTitle}>No friends yet</Text>
+          <Text style={styles.emptyText}>Search by username to get started</Text>
+          <TouchableOpacity
+            style={styles.findFriendsBtn}
+            onPress={() => {/* focus search */}}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.findFriendsBtnText}>Find Friends</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         // Friends & requests list
@@ -211,14 +219,7 @@ export default function FriendsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" />
           }
           renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>{section.title}</Text>
-              {(section.type === 'request' || section.type === 'sent') && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{section.data.length}</Text>
-                </View>
-              )}
-            </View>
+            <Text style={styles.sectionHeader}>{section.title}</Text>
           )}
           renderItem={({ item, section }) =>
             section.type === 'request' ? (
@@ -243,12 +244,7 @@ export default function FriendsScreen() {
             )
           }
           contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No friends yet</Text>
-              <Text style={styles.emptyText}>Search for users above to add friends!</Text>
-            </View>
-          }
+          stickySectionHeadersEnabled={false}
         />
       )}
     </View>
@@ -274,59 +270,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    gap: 8,
+  },
+  searchIcon: {
+    fontSize: 16,
+    color: '#bbb',
   },
   searchInput: {
     flex: 1,
     backgroundColor: '#f5f5f5',
     borderRadius: 10,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 15,
     color: '#1a1a1a',
-    marginRight: 8,
   },
   clearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   clearBtnText: {
-    color: '#FF6B35',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#aaa',
+    fontSize: 16,
   },
   list: {
     padding: 16,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#999',
+    letterSpacing: 0.8,
     marginBottom: 8,
     marginTop: 8,
   },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  badge: {
-    backgroundColor: '#FF6B35',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: '#fff',
+  resultLabel: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  resultCount: {
-    fontSize: 13,
-    color: '#888',
+    color: '#999',
+    letterSpacing: 0.8,
     marginBottom: 12,
   },
   statusMessage: {
@@ -361,18 +343,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  empty: {
-    paddingVertical: 40,
+  emptyState: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFF0E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyIconText: {
+    fontSize: 32,
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: 15,
     color: '#888',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  findFriendsBtn: {
+    backgroundColor: '#FF6B35',
+    borderRadius: 28,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  findFriendsBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
