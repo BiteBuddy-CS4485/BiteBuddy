@@ -5,7 +5,7 @@
 Version 1.1 - Weekly Progress Aligned Spec  
 Sprint history and delivery plan through May 1, 2026  
 Stack: Expo/React Native, Next.js Route Handlers, Supabase Postgres/Auth/Realtime, Google Places API  
-Last Updated: March 13, 2026
+Last Updated: April 3, 2026
 
 Read this entire specification before writing code. This document is the source of truth for coding agents working in this repository.
 
@@ -248,10 +248,11 @@ Goal: spend the remaining time making the existing MVP dependable, presentable, 
 Dates: March 14 - March 27, 2026
 
 Focus:
-- Finish aligning implemented screens with the wireframes for Home, Friends, Create Session, Lobby, Swipe, Results, History, and Profile/Settings.
 - Stabilize the end-to-end happy path: sign in, invite/join, start session, swipe, detect match, view results/history.
-- Fix the known friction points already surfaced by the team: RLS issues around invites, mobile/backend edge cases, and inconsistent session-state updates.
-- Implement the first real Google Places cost-control pass using lazy image loading and session-level reuse of restaurant/media data.
+- Implement UI/UX for the matching flow from wireframes.
+- Add reset password/forgot password functionality.
+- Identify bugs across the app and create corresponding tracking tasks.
+- Explore Supabase observability dashboards, record response times and identify common queries.
 
 Expected deliverables:
 - One reliable end-to-end demo path that works on mobile and web.
@@ -266,6 +267,8 @@ Focus:
 - Expand CI beyond contract generation so the repo checks basic install/build/test health before merges.
 - Standardize API error handling and frontend error messaging so demos fail gracefully instead of confusing users.
 - Decide and document the mobile beta distribution path, most likely around Expo/EAS plus TestFlight-style testing.
+- Complete the UI/UX flow in Figma/Canva and finish aligning remainig screens from wireframes.
+- Apply Google Places cost-reduction findings.
 
 Expected deliverables:
 - First regression test suite for core backend flows.
@@ -281,16 +284,23 @@ Focus:
 - Polish the screens using Paola's design work: typography, spacing, colors, empty states, loading states, and clearer match/session feedback.
 - Tighten the history, profile editing, and avatar flows so the app feels complete during a live walkthrough.
 - Revisit stretch features only if the core loop is already stable.
+- Implement shareable session invite codes and links so users can join without needing to be manually added by the host.
+- Revisit the restaurant count per session to optimize match quality and reduce swipe fatigue.
+- Surface meaningful usage metrics in the app using data from the Supabase observability work.
+- Expand user profile capabilities to improve personalization.
+- Add faster in-app access to restaurant details from Yelp/Google.
 
 Stretch features only after core stability:
 - Background invite notifications.
-- Password reset / forgot-password flow.
+- Monetization strategy research and initial implementation planning.
 - Rematch, share code/link, or extra session convenience features.
 
 Expected deliverables:
 - Beta candidate build.
 - Bug-fix log from real-device testing.
 - Presentation-ready UI for the app's main screens.
+- Shareable invite link/code mechanism.
+- Update restaurant queue sizing.
 
 ### 6.4 Final Delivery Window
 Dates: April 25 - May 1, 2026
@@ -322,12 +332,16 @@ When time is limited, use this priority order.
 - Consistent API/frontend error messaging.
 - Better mobile polish on the wireframed screens.
 - Beta/TestFlight-style release instructions and validation steps.
+- Shareable session invite code/link so any user can join without host-side manual add.
+- Supabase analytics integration using observabiliy data already collected.
+- Reconsider restaurant count per session to optimize match quality and reduce swipe fatigue.
 
 ### 7.3 Priority 2 - Stretch Work Only After Core Stability
 - Background notifications for invites or matches.
-- Password reset and deeper account-management flows.
-- Advanced midpoint fairness logic or ranking improvements.
 - Convenience features such as rematch, share links, or richer restaurant details.
+- Expand user profiles.
+- Monetization strategy research and initial implementation.
+- Faster in-app restaurant detail access from Yelp/Google.
 
 ## 8. API Reference (Full)
 Base URL: `/api`  
