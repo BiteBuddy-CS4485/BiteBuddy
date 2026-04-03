@@ -109,7 +109,7 @@ const components = {
         id: { type: "string", format: "uuid" },
         created_by: { type: "string", format: "uuid" },
         name: { type: "string" },
-        status: { type: "string", enum: ["waiting", "active", "completed"] },
+        status: { type: "string", enum: ["waiting", "active", "completed", "cancelled"] },
         latitude: { type: "number" },
         longitude: { type: "number" },
         radius_meters: { type: "integer" },
@@ -376,6 +376,13 @@ const components = {
       properties: {
         restaurant_id: { type: "string", format: "uuid" },
         liked: { type: "boolean" },
+      },
+    },
+    JoinSessionByCodeRequest: {
+      type: "object",
+      required: ["code"],
+      properties: {
+        code: { type: "string", minLength: 1 },
       },
     },
   },
@@ -791,6 +798,38 @@ const endpoints = [
   },
   {
     method: "post",
+    path: "/api/sessions/join-by-code",
+    summary: "Join a session using an invite code",
+    tags: ["sessions"],
+    requestBody: {
+      required: true,
+      content: jsonContent(ref("JoinSessionByCodeRequest")),
+    },
+    responses: {
+      200: {
+        description: "User joined session via invite code",
+        content: jsonContent(
+          dataResponse({
+            type: "object",
+            required: ["session_id", "status"],
+            properties: {
+              session_id: { type: "string", format: "uuid" },
+              status: {
+                type: "string",
+                enum: ["waiting", "active", "completed", "cancelled"],
+              },
+            },
+          })
+        ),
+      },
+      400: errorResponse("Invite code is required"),
+      401: errorResponse("Missing or invalid token"),
+      404: errorResponse("Invalid invite code"),
+      410: errorResponse("This session has already ended"),
+    },
+  },
+  {
+    method: "post",
     path: "/api/sessions/{id}/invite",
     summary: "Invite users to a session",
     tags: ["sessions"],
@@ -826,6 +865,54 @@ const endpoints = [
       },
       400: errorResponse("Join failed"),
       401: errorResponse("Missing or invalid token"),
+    },
+  },
+  {
+    method: "delete",
+    path: "/api/sessions/{id}/leave",
+    summary: "Leave a session as a member",
+    tags: ["sessions"],
+    parameters: [sessionIdPathParam],
+    responses: {
+      200: {
+        description: "User left session",
+        content: jsonContent(
+          dataResponse({
+            type: "object",
+            required: ["success"],
+            properties: {
+              success: { type: "boolean", enum: [true] },
+            },
+          })
+        ),
+      },
+      400: errorResponse("Leave failed"),
+      401: errorResponse("Missing or invalid token"),
+    },
+  },
+  {
+    method: "post",
+    path: "/api/sessions/{id}/cancel",
+    summary: "Cancel a session as the host",
+    tags: ["sessions"],
+    parameters: [sessionIdPathParam],
+    responses: {
+      200: {
+        description: "Session cancelled",
+        content: jsonContent(
+          dataResponse({
+            type: "object",
+            required: ["success"],
+            properties: {
+              success: { type: "boolean", enum: [true] },
+            },
+          })
+        ),
+      },
+      400: errorResponse("Session is already ended"),
+      401: errorResponse("Missing or invalid token"),
+      403: errorResponse("Only the host can cancel this session"),
+      404: errorResponse("Session not found"),
     },
   },
   {
