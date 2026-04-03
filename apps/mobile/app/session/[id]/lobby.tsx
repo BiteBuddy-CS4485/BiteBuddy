@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Image,
+  ActivityIndicator, Alert, Image, Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { apiGet, apiPost } from '../../../lib/api';
+import { apiGet, apiPost, apiDelete } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { SessionDetails } from '@bitebuddy/shared';
@@ -16,6 +16,9 @@ export default function LobbyScreen() {
   const [session, setSession] = useState<SessionDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [confirming, setConfirming] = useState<'cancel' | 'leave' | null>(null);
+  const [actioning, setActioning] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   async function loadSession() {
     try {
@@ -50,8 +53,12 @@ export default function LobbyScreen() {
         table: 'sessions',
         filter: `id=eq.${id}`,
       }, (payload) => {
-        if (payload.new && (payload.new as any).status === 'active') {
+        const status = (payload.new as any)?.status;
+        if (status === 'active') {
           router.replace(`/session/${id}/swipe`);
+        } else if (status === 'cancelled') {
+          Alert.alert('Session Cancelled', 'The host has cancelled this session.');
+          router.replace('/(tabs)');
         }
       })
       .subscribe();
@@ -60,6 +67,34 @@ export default function LobbyScreen() {
       supabase.removeChannel(channel);
     };
   }, [id]);
+
+  async function handleShare() {
+    if (!session?.invite_code) return;
+    try {
+      await Share.share({
+        message: `Join my BiteBuddy session "${session.name}"!\nUse invite code: ${session.invite_code}`,
+      });
+    } catch {
+      // user dismissed share sheet — no-op
+    }
+  }
+
+  async function confirmAction() {
+    setActioning(true);
+    setActionError('');
+    try {
+      if (confirming === 'cancel') {
+        await apiPost(`/api/sessions/${id}/cancel`);
+      } else {
+        await apiDelete(`/api/sessions/${id}/leave`);
+      }
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      setActionError(err.message ?? 'Something went wrong');
+    } finally {
+      setActioning(false);
+    }
+  }
 
   async function handleStart() {
     setStarting(true);
@@ -82,6 +117,14 @@ export default function LobbyScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>{session.name}</Text>
       <Text style={styles.subtitle}>Waiting for everyone to join...</Text>
+
+      {session.invite_code && (
+        <TouchableOpacity style={styles.inviteBox} onPress={handleShare} activeOpacity={0.7}>
+          <Text style={styles.inviteLabel}>INVITE CODE</Text>
+          <Text style={styles.inviteCode}>{session.invite_code}</Text>
+          <Text style={styles.inviteHint}>Tap to share</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.sectionTitle}>
         Members ({session.members.length})
@@ -113,25 +156,57 @@ export default function LobbyScreen() {
         contentContainerStyle={styles.list}
       />
 
-      {isCreator && (
-        <TouchableOpacity
-          style={[styles.startButton, starting && styles.buttonDisabled]}
-          onPress={handleStart}
-          disabled={starting}
-        >
-          {starting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.startButtonText}>Start Session</Text>
-          )}
-        </TouchableOpacity>
-      )}
-
-      {!isCreator && (
-        <View style={styles.waitingBar}>
-          <Text style={styles.waitingText}>Waiting for the host to start...</Text>
-        </View>
-      )}
+      <View style={styles.bottomBar}>
+        {confirming ? (
+          <View style={styles.confirmBox}>
+            <Text style={styles.confirmText}>
+              {confirming === 'cancel'
+                ? 'End the session for everyone?'
+                : 'Leave this session?'}
+            </Text>
+            {actionError ? <Text style={styles.confirmError}>{actionError}</Text> : null}
+            <View style={styles.confirmRow}>
+              <TouchableOpacity style={styles.confirmNo} onPress={() => { setConfirming(null); setActionError(''); }} disabled={actioning}>
+                <Text style={styles.confirmNoText}>Keep</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmYes} onPress={confirmAction} disabled={actioning}>
+                {actioning
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.confirmYesText}>
+                      {confirming === 'cancel' ? 'Cancel Session' : 'Leave'}
+                    </Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <>
+            {isCreator ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.startButton, starting && styles.buttonDisabled]}
+                  onPress={handleStart}
+                  disabled={starting}
+                >
+                  {starting ? <ActivityIndicator color="#fff" /> : <Text style={styles.startButtonText}>Start Session</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirming('cancel')}>
+                  <Text style={styles.cancelButtonText}>Cancel Session</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.waitingBar}>
+                  <Text style={styles.waitingText}>Waiting for the host to start...</Text>
+                </View>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirming('leave')}>
+                  <Text style={styles.cancelButtonText}>Leave Session</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </>
+        )}
+      </View>
     </View>
   );
 }
@@ -156,6 +231,34 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     marginBottom: 24,
+  },
+  inviteBox: {
+    marginHorizontal: 24,
+    marginBottom: 20,
+    backgroundColor: '#FFF0E8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+    padding: 16,
+    alignItems: 'center',
+  },
+  inviteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B35',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  inviteCode: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 6,
+  },
+  inviteHint: {
+    fontSize: 12,
+    color: '#FF6B35',
+    marginTop: 6,
   },
   sectionTitle: {
     fontSize: 14,
@@ -215,11 +318,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
-  startButton: {
+  bottomBar: {
     position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 24,
+    paddingBottom: 36,
+    paddingTop: 12,
+    gap: 10,
+    backgroundColor: '#fff',
+  },
+  startButton: {
     backgroundColor: '#FF6B35',
     borderRadius: 14,
     padding: 16,
@@ -234,10 +344,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   waitingBar: {
-    position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
     backgroundColor: '#f5f5f5',
     borderRadius: 14,
     padding: 16,
@@ -247,5 +353,63 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 15,
     fontWeight: '500',
+  },
+  cancelButton: {
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#e53935',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  confirmBox: {
+    backgroundColor: '#fff3f3',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ffcdd2',
+  },
+  confirmError: {
+    fontSize: 13,
+    color: '#e53935',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  confirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  confirmNo: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  confirmNoText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#555',
+  },
+  confirmYes: {
+    flex: 1,
+    backgroundColor: '#e53935',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  confirmYesText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

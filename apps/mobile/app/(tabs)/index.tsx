@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
-  RefreshControl, Image, Dimensions, Alert,
+  RefreshControl, Dimensions, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
-import { apiGet } from '../../lib/api';
+import { apiGet, apiPost } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SessionCard } from '../../components/SessionCard';
@@ -16,10 +16,9 @@ import {
   type CuisineKey,
   type PlaceBusinessDTO,
   type DiscoverRestaurantsResponse,
-  type RecentMatchDTO,
-  type RecentMatchesResponse,
 } from '@bitebuddy/shared';
 import type { Session } from '@bitebuddy/shared';
+import type { JoinByCodeResponse } from '@bitebuddy/shared';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -31,6 +30,12 @@ export default function HomeScreen() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
 
+  // Join by code
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState('');
+
   // Location
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -40,10 +45,6 @@ export default function HomeScreen() {
   const [restaurants, setRestaurants] = useState<PlaceBusinessDTO[]>([]);
   const [restaurantsLoading, setRestaurantsLoading] = useState(false);
 
-  // Recent matches
-  const [recentMatches, setRecentMatches] = useState<RecentMatchDTO[]>([]);
-  const [matchesLoading, setMatchesLoading] = useState(true);
-
   // Refresh
   const [refreshing, setRefreshing] = useState(false);
 
@@ -51,7 +52,6 @@ export default function HomeScreen() {
     useCallback(() => {
       requestLocation();
       loadSessions();
-      loadRecentMatches();
     }, [])
   );
 
@@ -135,22 +135,38 @@ export default function HomeScreen() {
     }
   }
 
-  async function loadRecentMatches() {
-    try {
-      setMatchesLoading(true);
-      const data = await apiGet<RecentMatchesResponse>('/api/sessions/recent-matches?limit=10');
-      setRecentMatches(data.matches);
-    } catch {
-      setRecentMatches([]);
-    } finally {
-      setMatchesLoading(false);
-    }
-  }
-
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([requestLocation(), loadSessions(), loadRecentMatches()]);
+    await Promise.all([requestLocation(), loadSessions()]);
     setRefreshing(false);
+  }
+
+  async function handleJoinByCode() {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length !== 6) {
+      setJoinError('Please enter a 6-character invite code.');
+      return;
+    }
+    setJoinError('');
+    setJoining(true);
+    try {
+      const result = await apiPost<JoinByCodeResponse>('/api/sessions/join-by-code', { code });
+      setJoinModalVisible(false);
+      setJoinCode('');
+      if (result.status === 'waiting') {
+        router.push(`/session/${result.session_id}/lobby`);
+      } else if (result.status === 'active') {
+        router.push(`/session/${result.session_id}/swipe`);
+      } else {
+        setJoinModalVisible(false);
+        setJoinCode('');
+        Alert.alert('Session Ended', 'This session has already completed.');
+      }
+    } catch (err: any) {
+      setJoinError(err.message ?? 'Invalid invite code');
+    } finally {
+      setJoining(false);
+    }
   }
 
   function handleSessionPress(session: Session) {
@@ -163,7 +179,12 @@ export default function HomeScreen() {
     }
   }
 
-  const activeSessions = sessions.filter(s => s.status !== 'completed');
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  const activeSessions = sessions.filter(s =>
+    s.status !== 'completed' &&
+    s.status !== 'cancelled' &&
+    Date.now() - new Date(s.created_at).getTime() < TWENTY_FOUR_HOURS
+  );
   const displayName = profile?.display_name ?? profile?.username ?? 'there';
 
   return (
@@ -175,8 +196,15 @@ export default function HomeScreen() {
       >
         {/* Greeting */}
         <View style={styles.greeting}>
-          <Text style={styles.greetingTitle}>Hey, {displayName}!</Text>
-          <Text style={styles.greetingSubtitle}>Where are we eating today?</Text>
+          <View style={styles.greetingRow}>
+            <View>
+              <Text style={styles.greetingTitle}>Hey, {displayName}!</Text>
+              <Text style={styles.greetingSubtitle}>Where are we eating today?</Text>
+            </View>
+            <TouchableOpacity style={styles.joinCodeButton} onPress={() => setJoinModalVisible(true)}>
+              <Text style={styles.joinCodeButtonText}>Join</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Active Sessions */}
@@ -194,7 +222,7 @@ export default function HomeScreen() {
               <Text style={styles.ctaText}>Swipe on restaurants with friends!</Text>
             </TouchableOpacity>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={styles.horizontalList}>
               {activeSessions.map(session => (
                 <View key={session.id} style={styles.horizontalCard}>
                   <SessionCard session={session} onPress={() => handleSessionPress(session)} />
@@ -243,38 +271,6 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Recent Matches */}
-        {!matchesLoading && recentMatches.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Matches</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-              {recentMatches.map(match => (
-                <TouchableOpacity
-                  key={match.match_id}
-                  style={styles.matchCard}
-                  onPress={() => router.push(`/session/${match.session_id}/results`)}
-                  activeOpacity={0.7}
-                >
-                  {match.restaurant_image_url ? (
-                    <Image source={{ uri: match.restaurant_image_url }} style={styles.matchImage} />
-                  ) : (
-                    <View style={[styles.matchImage, styles.matchPlaceholder]}>
-                      <Text style={styles.matchPlaceholderText}>No Photo</Text>
-                    </View>
-                  )}
-                  <View style={styles.matchInfo}>
-                    <Text style={styles.matchRestaurant} numberOfLines={1}>{match.restaurant_name}</Text>
-                    <Text style={styles.matchSession} numberOfLines={1}>{match.session_name}</Text>
-                    {match.restaurant_rating != null && (
-                      <Text style={styles.matchRating}>&#9733; {match.restaurant_rating.toFixed(1)}</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
         {/* Bottom spacer for FAB */}
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -286,6 +282,37 @@ export default function HomeScreen() {
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      {/* Join by Code Modal */}
+      <Modal visible={joinModalVisible} transparent animationType="fade" onRequestClose={() => { setJoinModalVisible(false); setJoinCode(''); setJoinError(''); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Join a Session</Text>
+            <Text style={styles.modalSubtitle}>Enter the 6-character invite code</Text>
+            <TextInput
+              style={styles.codeInput}
+              value={joinCode}
+              onChangeText={t => { setJoinCode(t.toUpperCase()); setJoinError(''); }}
+              placeholder="ABC123"
+              placeholderTextColor="#bbb"
+              autoCapitalize="characters"
+              maxLength={6}
+              autoFocus
+            />
+            {joinError ? <Text style={styles.joinErrorText}>{joinError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.joinButton, joining && styles.joinButtonDisabled]}
+              onPress={handleJoinByCode}
+              disabled={joining}
+            >
+              {joining ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>Join Session</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setJoinModalVisible(false); setJoinCode(''); setJoinError(''); }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -303,6 +330,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 20,
   },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   greetingTitle: {
     fontSize: 26,
     fontWeight: '700',
@@ -312,6 +344,82 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 4,
+  },
+  joinCodeButton: {
+    backgroundColor: '#FF6B35',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  joinCodeButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 20,
+  },
+  codeInput: {
+    width: '100%',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    letterSpacing: 8,
+    marginBottom: 16,
+  },
+  joinErrorText: {
+    color: '#e53935',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 10,
+    width: '100%',
+  },
+  joinButton: {
+    width: '100%',
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  joinButtonDisabled: {
+    opacity: 0.5,
+  },
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelText: {
+    color: '#888',
+    fontSize: 15,
+    paddingVertical: 4,
   },
   section: {
     marginBottom: 24,
@@ -331,7 +439,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   horizontalCard: {
-    width: SCREEN_WIDTH * 0.75,
+    width: SCREEN_WIDTH * 0.55,
   },
   ctaCard: {
     marginHorizontal: 16,
@@ -402,45 +510,6 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     // width controlled by CompactRestaurantCard
-  },
-  matchCard: {
-    width: 160,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    ...shadow(0, 1, 4, 0.08),
-  },
-  matchImage: {
-    width: '100%',
-    height: 100,
-    backgroundColor: '#e0e0e0',
-  },
-  matchPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchPlaceholderText: {
-    color: '#999',
-    fontSize: 12,
-  },
-  matchInfo: {
-    padding: 8,
-  },
-  matchRestaurant: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 2,
-  },
-  matchSession: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 2,
-  },
-  matchRating: {
-    fontSize: 12,
-    color: '#FF6B35',
-    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

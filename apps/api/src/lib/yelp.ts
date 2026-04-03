@@ -81,7 +81,6 @@ export async function searchRestaurants(params: PlacesSearchParams): Promise<Pla
         'places.priceLevel',
         'places.primaryType',
         'places.types',
-
         'places.nationalPhoneNumber',
         'places.googleMapsUri',
       ].join(','),
@@ -95,7 +94,19 @@ export async function searchRestaurants(params: PlacesSearchParams): Promise<Pla
   }
 
   const data = await response.json();
-  const places = data.places ?? [];
+  const places = (data.places ?? []).filter((place: any) => {
+    const primary: string = place.primaryType ?? '';
+    // Keep only places whose primary type is food/dining related
+    return (
+      primary === 'restaurant' ||
+      primary.endsWith('_restaurant') ||
+      primary === 'cafe' ||
+      primary === 'coffee_shop' ||
+      primary === 'bakery' ||
+      primary === 'fast_food_restaurant' ||
+      primary === 'food_court'
+    );
+  });
 
   return places.map((place: any) => {
     const imageUrl: string | null = null;

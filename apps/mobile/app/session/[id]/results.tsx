@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet } from '../../../lib/api';
+import { supabase } from '../../../lib/supabase';
 import { shadow } from '../../../lib/shadows';
 import type { SessionResults, SessionRestaurant, Match } from '@bitebuddy/shared';
 
@@ -25,6 +26,25 @@ export default function ResultsScreen() {
 
   useEffect(() => {
     loadResults();
+  }, [id]);
+
+  // Realtime: reload when a new match is created
+  useEffect(() => {
+    const channel = supabase
+      .channel(`results-${id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'matches',
+        filter: `session_id=eq.${id}`,
+      }, () => {
+        loadResults();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   async function loadResults() {

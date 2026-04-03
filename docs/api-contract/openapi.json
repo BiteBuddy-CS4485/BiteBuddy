@@ -207,7 +207,8 @@
             "enum": [
               "waiting",
               "active",
-              "completed"
+              "completed",
+              "cancelled"
             ]
           },
           "latitude": {
@@ -748,6 +749,18 @@
           },
           "liked": {
             "type": "boolean"
+          }
+        }
+      },
+      "JoinSessionByCodeRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -1820,6 +1833,103 @@
         ]
       }
     },
+    "/api/sessions/{id}/cancel": {
+      "post": {
+        "operationId": "post_sessions_id_cancel",
+        "summary": "Cancel a session as the host",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "success"
+                      ],
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session is already ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the host can cancel this session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/sessions/{id}/invite": {
       "post": {
         "operationId": "post_sessions_id_invite",
@@ -1939,6 +2049,83 @@
           },
           "400": {
             "description": "Join failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sessions/{id}/leave": {
+      "delete": {
+        "operationId": "delete_sessions_id_leave",
+        "summary": "Leave a session as a member",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User left session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "success"
+                      ],
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Leave failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -2281,6 +2468,109 @@
         ]
       }
     },
+    "/api/sessions/join-by-code": {
+      "post": {
+        "operationId": "post_sessions_join_by_code",
+        "summary": "Join a session using an invite code",
+        "tags": [
+          "sessions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinSessionByCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User joined session via invite code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "session_id",
+                        "status"
+                      ],
+                      "properties": {
+                        "session_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "waiting",
+                            "active",
+                            "completed",
+                            "cancelled"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invite code is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid invite code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "This session has already ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/sessions/recent-matches": {
       "get": {
         "operationId": "get_sessions_recent_matches",
@@ -2360,5 +2650,5 @@
       }
     }
   },
-  "x-generatorHash": "c42a98b263f1a4e00823c8600970141b98c1285b46422020ba5b20015d29cd9e"
+  "x-generatorHash": "0e6922b7f5f955fef97606e444286acf5bc073f803fb4d8a3a7f29192166938c"
 }

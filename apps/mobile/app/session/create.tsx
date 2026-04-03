@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform,
+  ScrollView, Alert, ActivityIndicator, Platform, Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -21,6 +21,7 @@ export default function CreateSessionScreen() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'form' | 'invite'>('form');
   const [sessionId, setSessionId] = useState<string>('');
+  const [inviteCode, setInviteCode] = useState<string>('');
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
 
@@ -69,6 +70,7 @@ export default function CreateSessionScreen() {
         category_filter: category.trim() || undefined,
       });
       setSessionId(session.id);
+      setInviteCode(session.invite_code ?? '');
 
       // Load friends for invite step
       const friendsData = await apiGet<FriendWithProfile[]>('/api/friends');
@@ -114,6 +116,18 @@ export default function CreateSessionScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.title}>Invite Friends</Text>
           <Text style={styles.subtitle}>Select friends to join your session</Text>
+
+          {inviteCode ? (
+            <TouchableOpacity
+              style={styles.inviteBox}
+              onPress={() => Share.share({ message: `Join my BiteBuddy session! Use invite code: ${inviteCode}` })}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.inviteLabel}>INVITE CODE</Text>
+              <Text style={styles.inviteCode}>{inviteCode}</Text>
+              <Text style={styles.inviteHint}>Tap to share with anyone</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {friends.length === 0 ? (
             <Text style={styles.empty}>No friends to invite. You can skip this step.</Text>
@@ -272,6 +286,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#f0ad4e',
     marginTop: 12,
+  },
+  inviteBox: {
+    backgroundColor: '#FFF0E8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  inviteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B35',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  inviteCode: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 6,
+  },
+  inviteHint: {
+    fontSize: 12,
+    color: '#FF6B35',
+    marginTop: 6,
   },
   empty: {
     fontSize: 15,

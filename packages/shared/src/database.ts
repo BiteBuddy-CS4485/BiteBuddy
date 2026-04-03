@@ -20,12 +20,13 @@ export interface Session {
   id: string;
   created_by: string;
   name: string;
-  status: 'waiting' | 'active' | 'completed';
+  status: 'waiting' | 'active' | 'completed' | 'cancelled';
   latitude: number;
   longitude: number;
   radius_meters: number;
   price_filter: string[] | null;
   category_filter: string | null;
+  invite_code: string | null;
   created_at: string;
   updated_at: string;
 }

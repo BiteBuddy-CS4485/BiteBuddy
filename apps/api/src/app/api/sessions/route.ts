@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { getAuthenticatedClient } from '@/lib/auth';
 import type { CreateSessionRequest } from '@bitebuddy/shared';
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = randomBytes(6);
+  return Array.from(bytes).map(b => chars[b % 36]).join('');
+}
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
@@ -31,7 +38,10 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (statusFilter) {
-    query = query.eq('status', statusFilter);
+    const statuses = statusFilter.split(',').map(s => s.trim()).filter(Boolean);
+    query = statuses.length === 1
+      ? query.eq('status', statuses[0])
+      : query.in('status', statuses);
   }
 
   const { data, error } = await query;
@@ -84,6 +94,7 @@ export async function POST(request: NextRequest) {
       radius_meters: body.radius_meters ?? 5000,
       price_filter: body.price_filter ?? null,
       category_filter: body.category_filter ?? null,
+      invite_code: generateInviteCode(),
     })
     .select()
     .single();

@@ -4,8 +4,6 @@ Group dining decision app where friends swipe restaurants together and match on 
 
 ## Deployment Links
 
-Replace these placeholders with your live links.
-
 - API Deployment: `https://bite-buddy-api-eight.vercel.app/`
 - Web Deployment: `https://bitebuddy-web.vercel.app/`
 - API Docs (Swagger UI): `https://bite-buddy-api-eight.vercel.app/api/docs`
