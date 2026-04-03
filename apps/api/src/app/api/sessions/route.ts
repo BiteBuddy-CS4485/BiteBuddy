@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { getAuthenticatedClient } from '@/lib/auth';
 import type { CreateSessionRequest } from '@bitebuddy/shared';
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = randomBytes(6);
+  return Array.from(bytes).map(b => chars[b % 36]).join('');
+}
 
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
@@ -84,6 +91,7 @@ export async function POST(request: NextRequest) {
       radius_meters: body.radius_meters ?? 5000,
       price_filter: body.price_filter ?? null,
       category_filter: body.category_filter ?? null,
+      invite_code: generateInviteCode(),
     })
     .select()
     .single();

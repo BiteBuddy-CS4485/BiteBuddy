@@ -54,6 +54,15 @@ export interface InviteFriendsRequest {
   user_ids: string[];
 }
 
+export interface JoinByCodeRequest {
+  code: string;
+}
+
+export interface JoinByCodeResponse {
+  session_id: string;
+  status: 'waiting' | 'active' | 'completed';
+}
+
 export interface SwipeRequest {
   restaurant_id: string;
   liked: boolean;

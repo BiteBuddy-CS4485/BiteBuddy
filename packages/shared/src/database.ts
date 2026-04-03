@@ -26,6 +26,7 @@ export interface Session {
   radius_meters: number;
   price_filter: string[] | null;
   category_filter: string | null;
+  invite_code: string | null;
   created_at: string;
   updated_at: string;
 }

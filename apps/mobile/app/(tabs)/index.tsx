@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
-  RefreshControl, Image, Dimensions, Alert,
+  RefreshControl, Image, Dimensions, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
@@ -20,6 +20,7 @@ import {
   type RecentMatchesResponse,
 } from '@bitebuddy/shared';
 import type { Session } from '@bitebuddy/shared';
+import type { JoinByCodeResponse } from '@bitebuddy/shared';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,6 +31,11 @@ export default function HomeScreen() {
   // Sessions
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+
+  // Join by code
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   // Location
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -153,6 +159,31 @@ export default function HomeScreen() {
     setRefreshing(false);
   }
 
+  async function handleJoinByCode() {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length !== 6) {
+      Alert.alert('Invalid Code', 'Please enter a 6-character invite code.');
+      return;
+    }
+    setJoining(true);
+    try {
+      const result = await apiPost<JoinByCodeResponse>('/api/sessions/join-by-code', { code });
+      setJoinModalVisible(false);
+      setJoinCode('');
+      if (result.status === 'waiting') {
+        router.push(`/session/${result.session_id}/lobby`);
+      } else if (result.status === 'active') {
+        router.push(`/session/${result.session_id}/swipe`);
+      } else {
+        Alert.alert('Session Ended', 'This session has already completed.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Invalid invite code');
+    } finally {
+      setJoining(false);
+    }
+  }
+
   function handleSessionPress(session: Session) {
     if (session.status === 'waiting') {
       router.push(`/session/${session.id}/lobby`);
@@ -175,8 +206,15 @@ export default function HomeScreen() {
       >
         {/* Greeting */}
         <View style={styles.greeting}>
-          <Text style={styles.greetingTitle}>Hey, {displayName}!</Text>
-          <Text style={styles.greetingSubtitle}>Where are we eating today?</Text>
+          <View style={styles.greetingRow}>
+            <View>
+              <Text style={styles.greetingTitle}>Hey, {displayName}!</Text>
+              <Text style={styles.greetingSubtitle}>Where are we eating today?</Text>
+            </View>
+            <TouchableOpacity style={styles.joinCodeButton} onPress={() => setJoinModalVisible(true)}>
+              <Text style={styles.joinCodeButtonText}>Join</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Active Sessions */}
@@ -286,6 +324,36 @@ export default function HomeScreen() {
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      {/* Join by Code Modal */}
+      <Modal visible={joinModalVisible} transparent animationType="fade" onRequestClose={() => setJoinModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Join a Session</Text>
+            <Text style={styles.modalSubtitle}>Enter the 6-character invite code</Text>
+            <TextInput
+              style={styles.codeInput}
+              value={joinCode}
+              onChangeText={t => setJoinCode(t.toUpperCase())}
+              placeholder="ABC123"
+              placeholderTextColor="#bbb"
+              autoCapitalize="characters"
+              maxLength={6}
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[styles.joinButton, joining && styles.joinButtonDisabled]}
+              onPress={handleJoinByCode}
+              disabled={joining}
+            >
+              {joining ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>Join Session</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setJoinModalVisible(false); setJoinCode(''); }}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -303,6 +371,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 20,
   },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   greetingTitle: {
     fontSize: 26,
     fontWeight: '700',
@@ -312,6 +385,75 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 4,
+  },
+  joinCodeButton: {
+    backgroundColor: '#FF6B35',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  joinCodeButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 20,
+  },
+  codeInput: {
+    width: '100%',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    textAlign: 'center',
+    letterSpacing: 8,
+    marginBottom: 16,
+  },
+  joinButton: {
+    width: '100%',
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  joinButtonDisabled: {
+    opacity: 0.5,
+  },
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelText: {
+    color: '#888',
+    fontSize: 15,
+    paddingVertical: 4,
   },
   section: {
     marginBottom: 24,

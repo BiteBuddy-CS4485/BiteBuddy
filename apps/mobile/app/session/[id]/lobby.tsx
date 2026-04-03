@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Image,
+  ActivityIndicator, Alert, Image, Share,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { apiGet, apiPost } from '../../../lib/api';
@@ -61,6 +61,17 @@ export default function LobbyScreen() {
     };
   }, [id]);
 
+  async function handleShare() {
+    if (!session?.invite_code) return;
+    try {
+      await Share.share({
+        message: `Join my BiteBuddy session "${session.name}"!\nUse invite code: ${session.invite_code}`,
+      });
+    } catch {
+      // user dismissed share sheet — no-op
+    }
+  }
+
   async function handleStart() {
     setStarting(true);
     try {
@@ -82,6 +93,14 @@ export default function LobbyScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>{session.name}</Text>
       <Text style={styles.subtitle}>Waiting for everyone to join...</Text>
+
+      {session.invite_code && (
+        <TouchableOpacity style={styles.inviteBox} onPress={handleShare} activeOpacity={0.7}>
+          <Text style={styles.inviteLabel}>INVITE CODE</Text>
+          <Text style={styles.inviteCode}>{session.invite_code}</Text>
+          <Text style={styles.inviteHint}>Tap to share</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.sectionTitle}>
         Members ({session.members.length})
@@ -156,6 +175,34 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     marginBottom: 24,
+  },
+  inviteBox: {
+    marginHorizontal: 24,
+    marginBottom: 20,
+    backgroundColor: '#FFF0E8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+    padding: 16,
+    alignItems: 'center',
+  },
+  inviteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B35',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  inviteCode: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 6,
+  },
+  inviteHint: {
+    fontSize: 12,
+    color: '#FF6B35',
+    marginTop: 6,
   },
   sectionTitle: {
     fontSize: 14,
