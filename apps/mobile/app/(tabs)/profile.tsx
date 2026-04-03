@@ -1,25 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Image,
-  ActivityIndicator,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
+  Alert, Image, ActivityIndicator, Switch,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiPut } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 
-export default function ProfileScreen() {
+export default function SettingsScreen() {
+  const router = useRouter();
   const { user, profile, signOut, refreshProfile } = useAuth();
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   useEffect(() => {
     if (profile?.display_name) {
@@ -36,50 +32,28 @@ export default function ProfileScreen() {
       Alert.alert('Permission needed', 'Please allow access to your photo library to change your profile picture.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-
     if (result.canceled || !result.assets?.[0]) return;
-
     const asset = result.assets[0];
     setUploadingAvatar(true);
-
     try {
       const uri = asset.uri;
       const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const filePath = `${user!.id}/avatar.${ext}`;
-
-      // Fetch the image as a blob for upload
       const response = await fetch(uri);
       const blob = await response.blob();
-
-      // Upload to Supabase Storage (upsert to overwrite previous avatar)
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, blob, {
-          contentType: asset.mimeType ?? `image/${ext}`,
-          upsert: true,
-        });
-
+        .upload(filePath, blob, { contentType: asset.mimeType ?? `image/${ext}`, upsert: true });
       if (uploadError) throw uploadError;
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // Add cache-busting timestamp to force image refresh
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
       const avatarUrl = `${publicUrl}?t=${Date.now()}`;
-
-      // Save to profile via API
       await apiPut('/api/profile', { avatar_url: avatarUrl });
-
-      // Refresh profile to update UI everywhere
       await refreshProfile();
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to upload profile picture.');
@@ -115,10 +89,10 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {/* Avatar */}
-      <View style={styles.avatarContainer}>
-        <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar}>
+      <View style={styles.avatarSection}>
+        <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarWrap}>
           {profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
           ) : (
@@ -131,52 +105,98 @@ export default function ProfileScreen() {
               <ActivityIndicator color="#fff" />
             </View>
           ) : (
-            <View style={styles.changePhotoTag}>
-              <Text style={styles.changePhotoText}>Change Photo</Text>
+            <View style={styles.editBadge}>
+              <Text style={styles.editBadgeText}>✎</Text>
             </View>
           )}
         </TouchableOpacity>
+        <Text style={styles.profileName}>{profile?.display_name ?? profile?.username ?? ''}</Text>
+        <Text style={styles.profileUsername}>@{profile?.username ?? ''}</Text>
       </View>
 
-      {/* Display Name (editable) */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Display Name</Text>
-        <TextInput
-          style={styles.input}
-          value={displayName}
-          onChangeText={setDisplayName}
-          placeholder="Enter display name"
-          placeholderTextColor="#999"
-          autoCapitalize="words"
-        />
-        {hasChanges && (
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? 'Saving...' : 'Save'}
-            </Text>
-          </TouchableOpacity>
-        )}
+      {/* Account */}
+      <Text style={styles.groupLabel}>ACCOUNT</Text>
+      <View style={styles.group}>
+        <View style={styles.groupRow}>
+          <View style={styles.groupRowContent}>
+            <Text style={styles.groupRowLabel}>Email</Text>
+            <Text style={styles.groupRowValue}>{user?.email ?? '—'}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </View>
+        <View style={styles.groupDivider} />
+        <View style={styles.groupRow}>
+          <View style={styles.groupRowContent}>
+            <Text style={styles.groupRowLabel}>Display Name</Text>
+            <TextInput
+              style={styles.inlineInput}
+              value={displayName}
+              onChangeText={setDisplayName}
+              placeholder="Enter display name"
+              placeholderTextColor="#bbb"
+              autoCapitalize="words"
+              onBlur={() => { if (hasChanges) handleSave(); }}
+            />
+          </View>
+          {hasChanges && (
+            <TouchableOpacity
+              style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveBtnText}>{saving ? '...' : 'Save'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.groupDivider} />
+        <View style={styles.groupRow}>
+          <View style={styles.groupRowContent}>
+            <Text style={styles.groupRowLabel}>Username</Text>
+            <Text style={styles.groupRowValue}>@{profile?.username ?? '—'}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </View>
       </View>
 
-      {/* Username (read-only) */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Username</Text>
-        <Text style={styles.readOnly}>@{profile?.username ?? '—'}</Text>
+      {/* Preferences */}
+      <Text style={styles.groupLabel}>PREFERENCES</Text>
+      <View style={styles.group}>
+        <View style={styles.groupRow}>
+          <Text style={styles.groupRowLabel}>Notifications</Text>
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={setNotificationsEnabled}
+            trackColor={{ false: '#e0e0e0', true: '#FF6B35' }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
 
-      {/* Email (read-only) */}
-      <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
-        <Text style={styles.readOnly}>{user?.email ?? '—'}</Text>
+      {/* Privacy & Security */}
+      <Text style={styles.groupLabel}>PRIVACY & SECURITY</Text>
+      <View style={styles.group}>
+        <TouchableOpacity
+          style={styles.groupRow}
+          onPress={() => router.push('/(auth)/reset-password')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.groupRowLabel}>Change Password</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* About */}
+      <Text style={styles.groupLabel}>ABOUT</Text>
+      <View style={styles.group}>
+        <View style={styles.groupRow}>
+          <Text style={styles.groupRowLabel}>Version</Text>
+          <Text style={styles.groupRowValue}>1.0.0</Text>
+        </View>
       </View>
 
       {/* Sign Out */}
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Sign Out</Text>
+      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut} activeOpacity={0.85}>
+        <Text style={styles.signOutText}>Log Out</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -185,32 +205,40 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f8f8',
   },
   content: {
-    padding: 24,
-    alignItems: 'center',
+    paddingBottom: 40,
   },
-  avatarContainer: {
-    marginTop: 16,
-    marginBottom: 32,
+  avatarSection: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    marginBottom: 20,
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 12,
   },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#FF6B35',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#607D8B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
   },
   avatarText: {
     color: '#fff',
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: '700',
   },
   avatarOverlay: {
@@ -219,77 +247,118 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 48,
+    borderRadius: 44,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  changePhotoTag: {
+  editBadge: {
     position: 'absolute',
-    bottom: -4,
-    alignSelf: 'center',
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  changePhotoText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  field: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: '#1a1a1a',
-  },
-  readOnly: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: '#1a1a1a',
-  },
-  saveButton: {
-    marginTop: 10,
-    backgroundColor: '#FF6B35',
-    borderRadius: 12,
-    paddingVertical: 12,
+    bottom: 2,
+    right: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#333',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
+  editBadgeText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 13,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  profileUsername: {
+    fontSize: 14,
+    color: '#888',
+  },
+  groupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#999',
+    letterSpacing: 0.8,
+    marginHorizontal: 16,
+    marginBottom: 6,
+  },
+  group: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  groupRowContent: {
+    flex: 1,
+  },
+  groupRowLabel: {
+    fontSize: 15,
+    color: '#1a1a1a',
+    fontWeight: '500',
+  },
+  groupRowValue: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 2,
+  },
+  inlineInput: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 2,
+    padding: 0,
+  },
+  chevron: {
+    fontSize: 20,
+    color: '#ccc',
+    marginLeft: 8,
+  },
+  groupDivider: {
+    height: 1,
+    backgroundColor: '#f5f5f5',
+    marginLeft: 16,
+  },
+  saveBtn: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  saveBtnDisabled: {
+    opacity: 0.5,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '700',
   },
   signOutButton: {
-    marginTop: 24,
-    width: '100%',
-    backgroundColor: '#DC3545',
-    borderRadius: 12,
-    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   signOutText: {
-    color: '#fff',
+    color: '#1a1a1a',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
