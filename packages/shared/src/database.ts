@@ -20,7 +20,7 @@ export interface Session {
   id: string;
   created_by: string;
   name: string;
-  status: 'waiting' | 'active' | 'completed';
+  status: 'waiting' | 'active' | 'completed' | 'cancelled';
   latitude: number;
   longitude: number;
   radius_meters: number;

@@ -31,6 +31,14 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
   return json.data;
 }
 
+export async function apiDelete<T = unknown>(path: string): Promise<T> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_URL}${path}`, { method: 'DELETE', headers });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? 'Request failed');
+  return json.data;
+}
+
 export async function apiPut<T = unknown>(path: string, body?: unknown): Promise<T> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, {

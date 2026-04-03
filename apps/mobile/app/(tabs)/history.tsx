@@ -27,7 +27,7 @@ export default function HistoryScreen() {
 
   async function loadHistory() {
     try {
-      const data = await apiGet<Session[]>('/api/sessions?status=completed');
+      const data = await apiGet<Session[]>('/api/sessions?status=completed,cancelled');
       setSessions(data);
 
       // Fetch match counts for each session in parallel

@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ('error' in auth) return auth.error;
-  const { supabase, user } = auth;
+  const { user } = auth;
 
   const { code } = await request.json();
   if (!code || typeof code !== 'string') {
@@ -28,10 +28,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This session has already ended' }, { status: 410 });
   }
 
-  // Join the session using the user's own client (respects RLS)
-  const { error: joinError } = await supabase
+  // Insert using admin client — user is already authenticated above, admin bypasses RLS
+  const { error: joinError } = await admin
     .from('session_members')
-    .upsert({ session_id: session.id, user_id: user.id }, { onConflict: 'session_id,user_id' });
+    .upsert({ session_id: session.id, user_id: user.id }, { onConflict: 'session_id,user_id', ignoreDuplicates: true });
 
   if (joinError) {
     return NextResponse.json({ error: joinError.message }, { status: 400 });
