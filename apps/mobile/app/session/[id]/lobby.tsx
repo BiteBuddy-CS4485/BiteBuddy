@@ -154,6 +154,7 @@ export default function LobbyScreen() {
           </View>
         )}
         contentContainerStyle={styles.list}
+        style={styles.memberList}
       />
 
       <View style={styles.bottomBar}>
@@ -318,11 +319,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
+  memberList: {
+    flex: 1,
+  },
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 24,
     paddingBottom: 36,
     paddingTop: 12,

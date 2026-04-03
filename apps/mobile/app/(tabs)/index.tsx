@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator,
-  RefreshControl, Dimensions, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
+  RefreshControl, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
@@ -19,8 +19,6 @@ import {
 } from '@bitebuddy/shared';
 import type { Session } from '@bitebuddy/shared';
 import type { JoinByCodeResponse } from '@bitebuddy/shared';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -439,7 +437,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   horizontalCard: {
-    width: SCREEN_WIDTH * 0.55,
+    width: 360,
   },
   ctaCard: {
     marginHorizontal: 16,
