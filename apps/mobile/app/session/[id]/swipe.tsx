@@ -204,12 +204,12 @@ export default function SwipeScreen() {
 
           <View style={styles.actions}>
             <TouchableOpacity
-              style={[styles.actionBtn, styles.nopeBtn]}
+              style={[styles.actionBtn, styles.nopeBtn, swiping && styles.actionBtnSwiping]}
               onPress={() => handleSwipe(false)}
               disabled={swiping}
               activeOpacity={0.8}
             >
-              <Text style={styles.nopeBtnText}>✕</Text>
+              {swiping ? <ActivityIndicator size="small" color="#bbb" /> : <Text style={styles.nopeBtnText}>✕</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -220,12 +220,12 @@ export default function SwipeScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionBtn, styles.likeBtn]}
+              style={[styles.actionBtn, styles.likeBtn, swiping && styles.actionBtnSwiping]}
               onPress={() => handleSwipe(true)}
               disabled={swiping}
               activeOpacity={0.8}
             >
-              <Text style={styles.likeBtnText}>♥</Text>
+              {swiping ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.likeBtnText}>♥</Text>}
             </TouchableOpacity>
           </View>
         </>
@@ -333,6 +333,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow(0, 2, 6, 0.12),
+  },
+  actionBtnSwiping: {
+    opacity: 0.5,
   },
   nopeBtn: {
     backgroundColor: '#fff',
