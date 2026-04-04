@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
   }
 
-  if (session.status === 'completed') {
+  if (session.status === 'completed' || session.status === 'cancelled') {
     return NextResponse.json({ error: 'This session has already ended' }, { status: 410 });
   }
 

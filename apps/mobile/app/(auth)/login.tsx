@@ -8,11 +8,12 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
   async function handleLogin() {
@@ -28,6 +29,18 @@ export default function LoginScreen() {
       setError(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed');
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -107,6 +120,17 @@ export default function LoginScreen() {
           <Text style={styles.dividerText}>OR</Text>
           <View style={styles.dividerLine} />
         </View>
+
+        <TouchableOpacity
+          style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
+          onPress={handleGoogleLogin}
+          disabled={loading || googleLoading}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.googleButtonText}>
+            {googleLoading ? 'Connecting...' : 'Continue with Google'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Don't have an account?</Text>
@@ -226,6 +250,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  googleButton: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+  },
+  googleButtonText: {
+    color: '#1a1a1a',
+    fontSize: 17,
+    fontWeight: '600',
   },
   signupRow: {
     flexDirection: 'row',
