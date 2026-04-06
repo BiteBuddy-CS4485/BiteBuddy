@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase';
 import type { SwipeRequest } from '@bitebuddy/shared';
 
 export async function POST(
@@ -47,20 +46,9 @@ export async function POST(
     match = matchData;
   }
 
-  // Check if all members have swiped all restaurants — if so, complete the session
-  const admin = createAdminClient();
-  const [{ count: totalSwipes }, { count: memberCount }, { count: restaurantCount }] = await Promise.all([
-    admin.from('swipes').select('*', { count: 'exact', head: true }).eq('session_id', id),
-    admin.from('session_members').select('*', { count: 'exact', head: true }).eq('session_id', id),
-    admin.from('session_restaurants').select('*', { count: 'exact', head: true }).eq('session_id', id),
-  ]);
-
-  if (
-    totalSwipes !== null && memberCount !== null && restaurantCount !== null &&
-    restaurantCount > 0 && totalSwipes >= memberCount * restaurantCount
-  ) {
-    await admin.from('sessions').update({ status: 'completed' }).eq('id', id);
-  }
+  // Check if all members have swiped all restaurants — if so, complete the session.
+  // Uses a security-definer RPC so no service-role key is needed.
+  await supabase.rpc('maybe_complete_session', { p_session_id: id });
 
   return NextResponse.json({
     data: {

@@ -13,11 +13,3 @@ export function createServerClient(accessToken: string) {
     }
   );
 }
-
-// Admin client bypasses RLS — used only for invite-code lookups
-export function createAdminClient() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}

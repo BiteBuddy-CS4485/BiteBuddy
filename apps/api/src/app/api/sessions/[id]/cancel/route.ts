@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase';
 
 export async function POST(
   request: NextRequest,
@@ -30,9 +29,8 @@ export async function POST(
     return NextResponse.json({ error: 'Session is already ended' }, { status: 400 });
   }
 
-  // Use admin client to bypass RLS for the status update
-  const admin = createAdminClient();
-  const { error } = await admin
+  // The "Creator can update session" RLS policy allows the creator to update their own session.
+  const { error } = await supabase
     .from('sessions')
     .update({ status: 'cancelled' })
     .eq('id', id);

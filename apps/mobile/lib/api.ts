@@ -11,12 +11,26 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+async function parseResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) {
+    if (!res.ok) throw new Error(`Server error (${res.status})`);
+    return null;
+  }
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Server error (${res.status})`);
+  }
+  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
+  return json.data;
+}
+
 export async function apiGet<T = unknown>(path: string): Promise<T> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, { headers });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? 'Request failed');
-  return json.data;
+  return parseResponse(res);
 }
 
 export async function apiPost<T = unknown>(path: string, body?: unknown): Promise<T> {
@@ -26,17 +40,13 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? 'Request failed');
-  return json.data;
+  return parseResponse(res);
 }
 
 export async function apiDelete<T = unknown>(path: string): Promise<T> {
   const headers = await getAuthHeaders();
   const res = await fetch(`${API_URL}${path}`, { method: 'DELETE', headers });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? 'Request failed');
-  return json.data;
+  return parseResponse(res);
 }
 
 export async function apiPut<T = unknown>(path: string, body?: unknown): Promise<T> {
@@ -46,7 +56,5 @@ export async function apiPut<T = unknown>(path: string, body?: unknown): Promise
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? 'Request failed');
-  return json.data;
+  return parseResponse(res);
 }
