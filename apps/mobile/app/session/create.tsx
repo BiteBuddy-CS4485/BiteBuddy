@@ -109,7 +109,7 @@ export default function CreateSessionScreen() {
 
       router.replace(`/session/${session.id}/lobby`);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('handleCreate:', err);
     } finally {
       setLoading(false);
     }

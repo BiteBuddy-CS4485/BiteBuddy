@@ -56,7 +56,7 @@ export default function SettingsScreen() {
       await apiPut('/api/profile', { avatar_url: avatarUrl });
       await refreshProfile();
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to upload profile picture.');
+      console.error('handlePickAvatar:', e);
     } finally {
       setUploadingAvatar(false);
     }
@@ -74,7 +74,7 @@ export default function SettingsScreen() {
       await refreshProfile();
       Alert.alert('Success', 'Display name updated.');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to update display name.');
+      console.error('handleSave:', e);
     } finally {
       setSaving(false);
     }
@@ -84,7 +84,7 @@ export default function SettingsScreen() {
     try {
       await signOut();
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to sign out.');
+      console.error('handleSignOut:', e);
     }
   }
 

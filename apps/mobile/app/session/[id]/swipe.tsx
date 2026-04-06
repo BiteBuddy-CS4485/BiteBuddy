@@ -44,7 +44,7 @@ export default function SwipeScreen() {
       setCurrentIndex(user_swipe_count);
       setCreatedBy(sessionData.created_by);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('loadRestaurants:', err);
     } finally {
       setLoading(false);
     }
@@ -117,7 +117,7 @@ export default function SwipeScreen() {
       }
       setCurrentIndex(prev => prev + 1);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('handleSwipe:', err);
     } finally {
       setSwiping(false);
     }

@@ -27,11 +27,12 @@ export async function POST(request: NextRequest) {
   }
 
   // RLS "Users can join sessions" allows authenticated users to insert their own membership.
+  // Use plain insert; treat duplicate key (23505) as already-a-member, which is fine.
   const { error: joinError } = await supabase
     .from('session_members')
-    .upsert({ session_id: session.id, user_id: user.id }, { onConflict: 'session_id,user_id', ignoreDuplicates: true });
+    .insert({ session_id: session.id, user_id: user.id });
 
-  if (joinError) {
+  if (joinError && joinError.code !== '23505') {
     return NextResponse.json({ error: joinError.message }, { status: 400 });
   }
 

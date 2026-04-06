@@ -41,7 +41,7 @@ export default function FriendsScreen() {
       setRequests(requestsData ?? []);
       setSentRequests(sentData ?? []);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to load friends');
+      console.error('loadFriends:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -91,7 +91,7 @@ export default function FriendsScreen() {
       Alert.alert('Request Sent!', `Friend request sent to @${username}`);
       setSearchResults(prev => prev.filter(p => p.username !== username));
     } catch (err: any) {
-      Alert.alert('Could not send request', err.message || 'Something went wrong');
+      console.error('sendRequest:', err);
     } finally {
       setSendingTo(null);
     }
@@ -104,7 +104,7 @@ export default function FriendsScreen() {
       await apiPost('/api/friends/respond', { friendship_id: friendshipId, action });
       await loadFriends();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to respond');
+      console.error('respondToRequest:', err);
     } finally {
       setRespondingTo(null);
     }
