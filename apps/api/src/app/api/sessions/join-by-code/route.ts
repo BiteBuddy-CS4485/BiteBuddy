@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedClient(request);
   if ('error' in auth) return auth.error;
-  const { user } = auth;
+  const { supabase, user } = auth;
 
   const { code } = await request.json();
   if (!code || typeof code !== 'string') {
     return NextResponse.json({ error: 'Invite code is required' }, { status: 400 });
   }
 
-  // Use admin client to look up the session by code (bypasses RLS — user isn't a member yet)
-  const admin = createAdminClient();
-  const { data: session, error: sessionError } = await admin
-    .from('sessions')
-    .select('id, name, status')
-    .eq('invite_code', code.trim().toUpperCase())
-    .single();
+  // Use security-definer RPC to look up the session by invite code.
+  // This bypasses RLS without requiring the service-role key — the user isn't a member yet.
+  const { data: rows, error: sessionError } = await supabase
+    .rpc('get_session_by_invite_code', { p_code: code.trim().toUpperCase() });
+
+  const session = rows?.[0];
 
   if (sessionError || !session) {
     return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
@@ -28,8 +26,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This session has already ended' }, { status: 410 });
   }
 
-  // Insert using admin client — user is already authenticated above, admin bypasses RLS
-  const { error: joinError } = await admin
+  // RLS "Users can join sessions" allows authenticated users to insert their own membership.
+  const { error: joinError } = await supabase
     .from('session_members')
     .upsert({ session_id: session.id, user_id: user.id }, { onConflict: 'session_id,user_id', ignoreDuplicates: true });
 

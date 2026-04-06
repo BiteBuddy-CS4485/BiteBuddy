@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase';
 
 export async function DELETE(
   request: NextRequest,
@@ -22,9 +21,8 @@ export async function DELETE(
     return NextResponse.json({ error: 'As the host, use Cancel Session instead of Leave' }, { status: 400 });
   }
 
-  // Use admin client — session_members has no DELETE RLS policy
-  const admin = createAdminClient();
-  const { error } = await admin
+  // The "Users can leave sessions" RLS policy (migration 010) allows users to delete their own membership.
+  const { error } = await supabase
     .from('session_members')
     .delete()
     .eq('session_id', id)
