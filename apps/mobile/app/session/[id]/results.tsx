@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
-  Alert,
   Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -52,7 +51,7 @@ export default function ResultsScreen() {
       const data = await apiGet<SessionResults>(`/api/sessions/${id}/results`);
       setResults(data);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('loadResults:', err);
     } finally {
       setLoading(false);
     }

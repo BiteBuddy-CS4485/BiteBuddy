@@ -25,7 +25,7 @@ export default function LobbyScreen() {
       const data = await apiGet<SessionDetails>(`/api/sessions/${id}`);
       setSession(data);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('loadSession:', err);
     } finally {
       setLoading(false);
     }
@@ -88,7 +88,7 @@ export default function LobbyScreen() {
       await apiPost(`/api/sessions/${id}/start`);
       router.replace(`/session/${id}/swipe`);
     } catch (err: any) {
-      Alert.alert('Error', err.message);
+      console.error('handleStart:', err);
       setStarting(false);
     }
   }
