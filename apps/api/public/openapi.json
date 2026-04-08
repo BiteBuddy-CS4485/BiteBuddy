@@ -763,6 +763,131 @@
             "minLength": 1
           }
         }
+      },
+      "SessionDiscoverRequest": {
+        "type": "object",
+        "properties": {
+          "search_radius": {
+            "type": "number",
+            "minimum": 1,
+            "default": 1
+          },
+          "dietary_restrictions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "preferences": {
+            "type": "object",
+            "properties": {
+              "minRating": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": true,
+            "default": {}
+          }
+        }
+      },
+      "SessionDiscoverResponse": {
+        "type": "object",
+        "required": [
+          "centroid",
+          "search_radius",
+          "restaurant_count",
+          "restaurants"
+        ],
+        "properties": {
+          "centroid": {
+            "type": "object",
+            "required": [
+              "lat",
+              "lng"
+            ],
+            "properties": {
+              "lat": {
+                "type": "number"
+              },
+              "lng": {
+                "type": "number"
+              }
+            }
+          },
+          "search_radius": {
+            "type": "number"
+          },
+          "restaurant_count": {
+            "type": "integer"
+          },
+          "restaurants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "place_id",
+                "name",
+                "geometry"
+              ],
+              "properties": {
+                "place_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "geometry": {
+                  "type": "object",
+                  "required": [
+                    "location"
+                  ],
+                  "properties": {
+                    "location": {
+                      "type": "object",
+                      "required": [
+                        "lat",
+                        "lng"
+                      ],
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                },
+                "rating": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "user_ratings_total": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "types": {
+                  "type": "array",
+                  "nullable": true,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "vicinity": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "price_level": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        }
       }
     }
   },
@@ -1930,6 +2055,92 @@
         ]
       }
     },
+    "/api/sessions/{id}/discover": {
+      "post": {
+        "operationId": "post_sessions_id_discover",
+        "summary": "Discover restaurants for a session using member locations",
+        "tags": [
+          "sessions"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Session ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionDiscoverRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Restaurants discovered for the session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SessionDiscoverResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No user locations available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing authorization header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to discover restaurants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/sessions/{id}/invite": {
       "post": {
         "operationId": "post_sessions_id_invite",
@@ -2650,5 +2861,5 @@
       }
     }
   },
-  "x-generatorHash": "0e6922b7f5f955fef97606e444286acf5bc073f803fb4d8a3a7f29192166938c"
+  "x-generatorHash": "bced546a1f3d46284fa36259618e6f2ac3da2fab573d69cdfe22d5a00c290c87"
 }

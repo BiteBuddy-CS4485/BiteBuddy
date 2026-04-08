@@ -119,10 +119,12 @@ export async function POST(
     );
 
     return NextResponse.json({
-      centroid,
-      search_radius,
-      restaurant_count: filteredRestaurants.length,
-      restaurants: filteredRestaurants.slice(0, 20),
+      data: {
+        centroid,
+        search_radius,
+        restaurant_count: filteredRestaurants.length,
+        restaurants: filteredRestaurants.slice(0, 20),
+      },
     });
   } catch (error) {
     console.error('Error discovering restaurants:', error);

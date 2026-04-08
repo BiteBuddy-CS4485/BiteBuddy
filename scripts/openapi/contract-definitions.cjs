@@ -385,6 +385,76 @@ const components = {
         code: { type: "string", minLength: 1 },
       },
     },
+    SessionDiscoverRequest: {
+      type: "object",
+      properties: {
+        search_radius: { type: "number", minimum: 1, default: 1 },
+        dietary_restrictions: {
+          type: "array",
+          items: { type: "string" },
+          default: [],
+        },
+        preferences: {
+          type: "object",
+          properties: {
+            minRating: { type: "number" },
+          },
+          additionalProperties: true,
+          default: {},
+        },
+      },
+    },
+    SessionDiscoverResponse: {
+      type: "object",
+      required: ["centroid", "search_radius", "restaurant_count", "restaurants"],
+      properties: {
+        centroid: {
+          type: "object",
+          required: ["lat", "lng"],
+          properties: {
+            lat: { type: "number" },
+            lng: { type: "number" },
+          },
+        },
+        search_radius: { type: "number" },
+        restaurant_count: { type: "integer" },
+        restaurants: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["place_id", "name", "geometry"],
+            properties: {
+              place_id: { type: "string" },
+              name: { type: "string" },
+              geometry: {
+                type: "object",
+                required: ["location"],
+                properties: {
+                  location: {
+                    type: "object",
+                    required: ["lat", "lng"],
+                    properties: {
+                      lat: { type: "number" },
+                      lng: { type: "number" },
+                    },
+                  },
+                },
+              },
+              rating: { type: "number", nullable: true },
+              user_ratings_total: { type: "number", nullable: true },
+              types: {
+                type: "array",
+                nullable: true,
+                items: { type: "string" },
+              },
+              vicinity: { type: "string", nullable: true },
+              price_level: { type: "number", nullable: true },
+            },
+            additionalProperties: true,
+          },
+        },
+      },
+    },
   },
 };
 
@@ -794,6 +864,26 @@ const endpoints = [
       },
       401: errorResponse("Missing or invalid token"),
       404: errorResponse("Session not found"),
+    },
+  },
+  {
+    method: "post",
+    path: "/api/sessions/{id}/discover",
+    summary: "Discover restaurants for a session using member locations",
+    tags: ["sessions"],
+    parameters: [sessionIdPathParam],
+    requestBody: {
+      required: true,
+      content: jsonContent(ref("SessionDiscoverRequest")),
+    },
+    responses: {
+      200: {
+        description: "Restaurants discovered for the session",
+        content: jsonContent(dataResponse(ref("SessionDiscoverResponse"))),
+      },
+      400: errorResponse("No user locations available"),
+      401: errorResponse("Missing authorization header"),
+      500: errorResponse("Failed to discover restaurants"),
     },
   },
   {
