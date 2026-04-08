@@ -46,11 +46,57 @@ export async function POST(
     match = matchData;
   }
 
+  const [{ count: totalRestaurants }, { data: members }, { data: userSwipes }, { data: allSwipes }] = await Promise.all([
+    supabase
+      .from('session_restaurants')
+      .select('*', { count: 'exact', head: true })
+      .eq('session_id', id),
+    supabase
+      .from('session_members')
+      .select('user_id')
+      .eq('session_id', id),
+    supabase
+      .from('swipes')
+      .select('restaurant_id')
+      .eq('session_id', id)
+      .eq('user_id', user.id),
+    supabase
+      .from('swipes')
+      .select('user_id, restaurant_id')
+      .eq('session_id', id),
+  ]);
+
+  const totalRestaurantCount = totalRestaurants ?? 0;
+  const userSwipeCount = (userSwipes ?? []).length;
+
+  const userSwipeMap = new Map<string, Set<string>>();
+  (allSwipes ?? []).forEach((entry) => {
+    if (!userSwipeMap.has(entry.user_id)) {
+      userSwipeMap.set(entry.user_id, new Set<string>());
+    }
+    userSwipeMap.get(entry.user_id)?.add(entry.restaurant_id);
+  });
+
+  const sessionCompleted =
+    totalRestaurantCount > 0 &&
+    (members ?? []).length > 0 &&
+    (members ?? []).every((member) => (userSwipeMap.get(member.user_id)?.size ?? 0) >= totalRestaurantCount);
+
+  if (sessionCompleted) {
+    await supabase
+      .from('sessions')
+      .update({ status: 'completed' })
+      .eq('id', id)
+      .neq('status', 'completed');
+  }
+
   return NextResponse.json({
     data: {
       swipe_id: swipe.id,
       is_match: !!match,
       match: match ?? undefined,
+      user_swipe_count: userSwipeCount,
+      session_completed: sessionCompleted,
     },
   });
 }

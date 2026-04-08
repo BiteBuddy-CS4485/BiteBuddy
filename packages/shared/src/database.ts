@@ -3,6 +3,7 @@ export interface Profile {
   username: string;
   display_name: string;
   avatar_url: string | null;
+  last_active_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +36,7 @@ export interface SessionMember {
   session_id: string;
   user_id: string;
   joined_at: string;
+  invited: boolean;
 }
 
 export interface SessionRestaurant {

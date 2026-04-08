@@ -1,117 +1,106 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Image,
   Linking,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { SessionRestaurant } from '@bitebuddy/shared';
-import { shadow } from '../lib/shadows';
+
+interface MatchMember {
+  id: string;
+  name: string;
+}
 
 interface Props {
   visible: boolean;
   restaurant: SessionRestaurant | null;
+  members: MatchMember[];
   onClose: () => void;
 }
 
-export function MatchModal({ visible, restaurant, onClose }: Props) {
+export function MatchModal({ visible, restaurant, members, onClose }: Props) {
   if (!restaurant) return null;
 
-  const ratingDisplay = restaurant.rating != null ? restaurant.rating.toFixed(1) : null;
+  const selectedRestaurant = restaurant;
 
   function handleOpenMaps() {
-    // Try yelp_url first; fall back to a Google Maps search
-    if (restaurant!.yelp_url) {
-      Linking.openURL(restaurant!.yelp_url);
-    } else if (restaurant!.latitude != null && restaurant!.longitude != null) {
-      const url = `https://www.google.com/maps/search/?api=1&query=${restaurant!.latitude},${restaurant!.longitude}`;
-      Linking.openURL(url);
-    } else if (restaurant!.address) {
-      const encoded = encodeURIComponent(restaurant!.address);
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encoded}`);
+    if (selectedRestaurant.yelp_url) {
+      void Linking.openURL(selectedRestaurant.yelp_url);
+      return;
+    }
+
+    if (selectedRestaurant.latitude != null && selectedRestaurant.longitude != null) {
+      void Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${selectedRestaurant.latitude},${selectedRestaurant.longitude}`
+      );
+      return;
+    }
+
+    if (selectedRestaurant.address) {
+      void Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedRestaurant.address)}`
+      );
     }
   }
 
-  const hasMapLink =
-    restaurant.yelp_url != null ||
-    (restaurant.latitude != null && restaurant.longitude != null) ||
-    restaurant.address != null;
-
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.content}>
-          {/* Celebration Header */}
-          <Text style={styles.celebration}>🎉</Text>
-          <Text style={styles.title}>It's a Match!</Text>
-          <Text style={styles.subtitle}>Everyone wants to eat here</Text>
-
-          {/* Restaurant Photo */}
-          {restaurant.image_url ? (
-            <Image
-              source={{ uri: restaurant.image_url }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.image, styles.imagePlaceholder]}>
-              <Text style={styles.placeholderIcon}>🍽</Text>
-            </View>
-          )}
-
-          {/* Restaurant Name */}
-          <Text style={styles.name} numberOfLines={2}>
-            {restaurant.name}
-          </Text>
-
-          {/* Rating & Price Row */}
-          <View style={styles.detailsRow}>
-            {ratingDisplay != null && (
-              <View style={styles.ratingBadge}>
-                <Text style={styles.starIcon}>★</Text>
-                <Text style={styles.ratingText}>{ratingDisplay}</Text>
-              </View>
-            )}
-            {restaurant.review_count != null && (
-              <Text style={styles.reviewCount}>
-                ({restaurant.review_count.toLocaleString()} reviews)
-              </Text>
-            )}
-            {restaurant.price != null && (
-              <View style={styles.priceChip}>
-                <Text style={styles.priceText}>{restaurant.price}</Text>
-              </View>
-            )}
+        <View style={styles.container}>
+          <Text style={styles.title}>IT'S A MATCH!</Text>
+          <View style={styles.burstWrap}>
+            <Text style={styles.spark}>✦</Text>
+            <Text style={styles.spark}>·</Text>
+            <Ionicons name="navigate-outline" size={38} color="#ff6f70" style={styles.mainBurstIcon} />
+            <Text style={styles.spark}>·</Text>
+            <Text style={styles.spark}>✦</Text>
           </View>
 
-          {/* Address */}
-          {restaurant.address != null && (
-            <Text style={styles.address} numberOfLines={2}>
-              📍 {restaurant.address}
+          <View style={styles.card}>
+            <Text style={styles.restaurantName}>{restaurant.name}</Text>
+            <Text style={styles.restaurantMeta}>
+              {restaurant.categories?.[0]?.title || 'Restaurant'} · {restaurant.address ? '0.8 mi' : 'Near you'}
             </Text>
-          )}
 
-          {/* Action Buttons */}
-          <View style={styles.buttonGroup}>
-            {hasMapLink && (
-              <TouchableOpacity
-                style={styles.mapsButton}
-                onPress={handleOpenMaps}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.mapsButtonText}>View on Google Maps</Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.metrics}>
+              {restaurant.rating != null ? <Pill label={`★ ${restaurant.rating.toFixed(1)}`} /> : null}
+              {restaurant.price ? <Pill label={restaurant.price} /> : null}
+            </View>
 
+            <View style={styles.separator} />
+            <Text style={styles.agreedLabel}>ALL MEMBERS AGREED</Text>
+
+            <View style={styles.membersRow}>
+              {members.map((member) => (
+                <View key={member.id} style={styles.memberItem}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>{member.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.memberName} numberOfLines={1}>{member.name}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.separator} />
+            <Text style={styles.savedText}>Match saved to history</Text>
+          </View>
+
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.doneButton} onPress={onClose}>
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
             <TouchableOpacity
-              style={styles.dismissButton}
-              onPress={onClose}
-              activeOpacity={0.8}
+              style={styles.directionButton}
+              onPress={() => {
+                handleOpenMaps();
+                onClose();
+              }}
             >
-              <Text style={styles.dismissButtonText}>Keep Swiping</Text>
+              <Text style={styles.directionButtonText}>Get Directions</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -120,132 +109,154 @@ export function MatchModal({ visible, restaurant, onClose }: Props) {
   );
 }
 
+function Pill({ label }: { label: string }) {
+  return (
+    <View style={styles.pill}>
+      <Text style={styles.pillText}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'flex-start',
   },
-  content: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 360,
-    ...shadow(0, 8, 16, 0.25),
-  },
-  celebration: {
-    fontSize: 48,
-    marginBottom: 4,
+  container: {
+    flex: 1,
+    marginHorizontal: 10,
+    paddingTop: 120,
+    paddingBottom: 20,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FF6B35',
-    marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#888',
-    marginBottom: 20,
-  },
-  image: {
-    width: '100%',
-    height: 180,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  imagePlaceholder: {
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderIcon: {
-    fontSize: 40,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#1a1a1a',
     textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: -0.3,
+    color: '#101828',
+    fontSize: 20,
+    fontWeight: '800',
   },
-  detailsRow: {
+  burstWrap: {
+    marginTop: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 10,
   },
-  ratingBadge: {
+  spark: {
+    color: '#f4b400',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mainBurstIcon: {
+    transform: [{ rotate: '18deg' }],
+  },
+  card: {
+    marginTop: 30,
+    marginHorizontal: 0,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    padding: 14,
+  },
+  restaurantName: {
+    color: '#101828',
+    fontWeight: '700',
+    fontSize: 30,
+  },
+  restaurantMeta: {
+    marginTop: 3,
+    color: '#667085',
+    fontSize: 20,
+  },
+  metrics: {
+    marginTop: 10,
     flexDirection: 'row',
+    gap: 8,
+  },
+  pill: {
+    borderRadius: 16,
+    backgroundColor: '#eceff3',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  pillText: {
+    color: '#344054',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#d0d5dd',
+    marginVertical: 12,
+  },
+  agreedLabel: {
+    color: '#667085',
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.8,
+  },
+  membersRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  memberItem: {
     alignItems: 'center',
-    gap: 3,
+    width: 68,
   },
-  starIcon: {
-    fontSize: 17,
-    color: '#FF6B35',
-  },
-  ratingText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-  },
-  reviewCount: {
-    fontSize: 14,
-    color: '#888',
-  },
-  priceChip: {
-    borderWidth: 1.5,
-    borderColor: '#FF6B35',
+  memberAvatar: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
+    backgroundColor: '#b2bbc7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  priceText: {
-    fontSize: 13,
+  memberAvatarText: {
+    color: '#fff',
     fontWeight: '700',
-    color: '#FF6B35',
+    fontSize: 18,
   },
-  address: {
+  memberName: {
+    marginTop: 6,
+    color: '#101828',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  savedText: {
+    color: '#667085',
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    fontWeight: '600',
   },
-  buttonGroup: {
-    width: '100%',
+  actions: {
+    marginTop: 16,
+    marginHorizontal: 0,
+    flexDirection: 'row',
     gap: 10,
   },
-  mapsButton: {
-    backgroundColor: '#FF6B35',
-    paddingVertical: 14,
-    borderRadius: 12,
+  doneButton: {
+    flex: 1,
+    borderRadius: 22,
+    backgroundColor: '#d7dce4',
+    paddingVertical: 12,
     alignItems: 'center',
   },
-  mapsButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  doneButtonText: {
+    color: '#101828',
     fontWeight: '700',
+    fontSize: 17,
   },
-  dismissButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    borderRadius: 12,
+  directionButton: {
+    flex: 1,
+    borderRadius: 22,
+    backgroundColor: '#ff6f70',
+    paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0',
   },
-  dismissButtonText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
+  directionButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 17,
   },
 });

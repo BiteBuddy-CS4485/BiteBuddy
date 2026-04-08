@@ -37,17 +37,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data) setProfile(data as Profile);
   }
 
+  async function markProfileActive(userId: string) {
+    await supabase
+      .from('profiles')
+      .update({ last_active_at: new Date().toISOString() })
+      .eq('id', userId);
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s) fetchProfile(s.user.id);
+      if (s) {
+        void markProfileActive(s.user.id);
+        fetchProfile(s.user.id);
+      }
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, s) => {
         setSession(s);
-        if (s) fetchProfile(s.user.id);
+        if (s) {
+          void markProfileActive(s.user.id);
+          fetchProfile(s.user.id);
+        }
         else setProfile(null);
       }
     );
@@ -60,12 +73,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         supabase.auth.startAutoRefresh();
+        if (session?.user.id) {
+          void markProfileActive(session.user.id);
+        }
       } else {
         supabase.auth.stopAutoRefresh();
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+
+    void markProfileActive(session.user.id);
+    const interval = setInterval(() => {
+      void markProfileActive(session.user.id);
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, [session?.user.id]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

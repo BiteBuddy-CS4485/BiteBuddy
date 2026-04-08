@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ALLOWED_ORIGINS = [
   'http://localhost:8081',
+  'http://localhost:8082',
   'http://localhost:19006',
   'http://localhost:3000',
   'https://bitebuddy-web.vercel.app',

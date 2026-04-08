@@ -12,7 +12,7 @@ function AuthGate() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)');
     } else if (session && needsProfileSetup) {
       if (segments.join('/') !== '(auth)/profile-setup') {
         router.replace('/(auth)/profile-setup');

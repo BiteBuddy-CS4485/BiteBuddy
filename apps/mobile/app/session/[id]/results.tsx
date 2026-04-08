@@ -92,9 +92,12 @@ export default function ResultsScreen() {
             )}
           </View>
 
-          {r.categories && r.categories.length > 0 && (
+          {Array.isArray(r.categories) && r.categories.length > 0 && (
             <Text style={styles.categories} numberOfLines={1}>
-              {r.categories.map((c) => c.title).join(', ')}
+              {r.categories
+                .filter((c) => c && typeof c.title === 'string')
+                .map((c) => c.title)
+                .join(', ')}
             </Text>
           )}
 

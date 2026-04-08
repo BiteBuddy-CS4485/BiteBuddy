@@ -40,11 +40,38 @@ const LEVEL_TO_SYMBOL: Record<string, string> = {
   PRICE_LEVEL_VERY_EXPENSIVE: '$$$$',
 };
 
+const CATEGORY_TO_TYPES: Record<string, string[]> = {
+  all: ['restaurant'],
+  all_cuisines: ['restaurant'],
+  american: ['american_restaurant', 'hamburger_restaurant', 'barbecue_restaurant'],
+  italian: ['italian_restaurant', 'pizza_restaurant'],
+  mexican: ['mexican_restaurant'],
+  chinese: ['chinese_restaurant'],
+  japanese: ['japanese_restaurant', 'sushi_restaurant'],
+  thai: ['thai_restaurant'],
+  indian: ['indian_restaurant'],
+  mediterranean: ['mediterranean_restaurant'],
+  korean: ['korean_restaurant'],
+  vietnamese: ['vietnamese_restaurant'],
+  greek: ['greek_restaurant'],
+  french: ['french_restaurant'],
+  spanish: ['spanish_restaurant'],
+};
+
 export function mapPriceFilter(priceFilter: string[] | null | undefined): string[] | undefined {
   if (!priceFilter?.length) return undefined;
   return priceFilter
     .map(p => PRICE_TO_LEVEL[p])
     .filter(Boolean);
+}
+
+export function mapCategoryFilter(categoryFilter: string | null | undefined): string[] | undefined {
+  if (!categoryFilter) return undefined;
+  const normalized = categoryFilter.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!normalized || normalized === 'all' || normalized === 'all_cuisines') {
+    return undefined;
+  }
+  return CATEGORY_TO_TYPES[normalized] ?? ['restaurant'];
 }
 
 export async function searchRestaurants(params: PlacesSearchParams): Promise<PlaceBusiness[]> {

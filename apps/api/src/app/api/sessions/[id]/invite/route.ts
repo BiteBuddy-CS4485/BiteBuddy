@@ -19,14 +19,33 @@ export async function POST(
     return NextResponse.json({ error: 'user_ids are required' }, { status: 400 });
   }
 
-  const rows = body.user_ids.map(userId => ({
-    session_id: id,
-    user_id: userId,
-  }));
+  const { data: existingMembers, error: existingError } = await supabase
+    .from('session_members')
+    .select('user_id')
+    .eq('session_id', id)
+    .in('user_id', body.user_ids);
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 400 });
+  }
+
+  const existingUserIds = new Set((existingMembers ?? []).map((member) => member.user_id));
+
+  const rows = body.user_ids
+    .filter((userId) => !existingUserIds.has(userId))
+    .map((userId) => ({
+      session_id: id,
+      user_id: userId,
+      invited: true,
+    }));
+
+  if (rows.length === 0) {
+    return NextResponse.json({ data: [] }, { status: 200 });
+  }
 
   const { data, error } = await supabase
     .from('session_members')
-    .upsert(rows, { onConflict: 'session_id,user_id' })
+    .insert(rows)
     .select();
 
   if (error) {

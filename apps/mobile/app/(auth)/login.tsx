@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, SafeAreaView,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function LoginScreen() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   async function handleLogin() {
@@ -31,13 +33,17 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.inner}>
-        <Text style={styles.title}>BiteBuddy</Text>
-        <Text style={styles.subtitle}>Find your group's next meal</Text>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.inner}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/(auth)')}>
+          <Ionicons name="arrow-back" size={26} color="#475569" />
+        </TouchableOpacity>
+
+        <Text style={styles.title}>Welcome back !</Text>
+        <Text style={styles.subtitle}>Sign in to find where your group eats</Text>
 
         {error ? (
           <View style={styles.errorBox}>
@@ -45,170 +51,195 @@ export default function LoginScreen() {
           </View>
         ) : null}
 
+        <Text style={styles.label}>EMAIL</Text>
         <TextInput
           style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#999"
+          placeholder="you@example.com"
+          placeholderTextColor="#8f8f8f"
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+
+        <Text style={styles.label}>PASSWORD</Text>
+        <View style={styles.passwordWrap}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="••••••••"
+            placeholderTextColor="#8f8f8f"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)}>
+            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={26} color="#98a2b3" />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.forgotBtn}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
-          disabled={loading || googleLoading}
+          disabled={loading}
         >
           <Text style={styles.buttonText}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing In...' : 'Sign In'}
           </Text>
         </TouchableOpacity>
 
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
+          <Text style={styles.dividerText}>OR</Text>
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity
-          style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
-          onPress={async () => {
-            setError('');
-            setGoogleLoading(true);
-            try {
-              await signInWithGoogle();
-            } catch (err: any) {
-              setError(err.message || 'Google sign-in failed');
-            } finally {
-              setGoogleLoading(false);
-            }
-          }}
-          disabled={loading || googleLoading}
-        >
-          <Text style={styles.googleButtonText}>
-            {googleLoading ? 'Connecting...' : 'Continue with Google'}
-          </Text>
-        </TouchableOpacity>
-
         <Link href="/(auth)/signup" asChild>
           <TouchableOpacity style={styles.link}>
-            <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
-            </Text>
+            <Text style={styles.linkText}>Don't have an account?</Text>
+            <Text style={styles.linkBold}>Create one →</Text>
           </TouchableOpacity>
         </Link>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f3f4f6',
   },
   inner: {
     flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#eaecf0',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    marginBottom: 18,
   },
   title: {
-    fontSize: 36,
+    fontSize: 42,
+    lineHeight: 48,
     fontWeight: '800',
-    color: '#FF6B35',
-    textAlign: 'center',
-    marginBottom: 4,
+    color: '#0f172a',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#888',
-    textAlign: 'center',
-    marginBottom: 40,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#475467',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#667085',
+    marginBottom: 6,
+    marginTop: 8,
+    letterSpacing: 0.8,
   },
   input: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#eaecf0',
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    marginBottom: 10,
     color: '#1a1a1a',
   },
-  button: {
-    backgroundColor: '#FF6B35',
+  passwordWrap: {
+    backgroundColor: '#eaecf0',
     borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 2,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1a1a1a',
+    paddingVertical: 10,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 12,
+    marginBottom: 14,
+  },
+  forgotText: {
+    color: '#ff6f70',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  button: {
+    backgroundColor: '#ff766a',
+    borderRadius: 30,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: '#9a5c4a',
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
   link: {
-    marginTop: 20,
+    marginTop: 8,
     alignItems: 'center',
   },
   linkText: {
-    fontSize: 15,
-    color: '#666',
+    fontSize: 14,
+    color: '#475467',
+    marginBottom: 4,
   },
   linkBold: {
-    color: '#FF6B35',
-    fontWeight: '600',
+    color: '#ff6f70',
+    fontWeight: '700',
+    fontSize: 14,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 18,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: '#d0d5dd',
   },
   dividerText: {
     marginHorizontal: 12,
-    color: '#999',
-    fontSize: 14,
-  },
-  googleButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#ddd',
-  },
-  googleButtonText: {
-    color: '#333',
-    fontSize: 17,
-    fontWeight: '600',
+    color: '#667085',
+    fontSize: 13,
+    fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#FFE8E0',
-    borderRadius: 10,
+    backgroundColor: '#fee4e2',
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FF6B35',
+    marginBottom: 14,
   },
   errorText: {
-    color: '#CC3300',
+    color: '#b42318',
     fontSize: 14,
-    textAlign: 'center',
     fontWeight: '500',
   },
 });

@@ -27,6 +27,9 @@ interface SessionParticipant {
 
 interface SessionWithUsers {
   id: string;
+  radius_meters: number;
+  price_filter: string[] | null;
+  category_filter: string | null;
   participants: SessionParticipant[];
   user_locations: Record<string, SessionLocation>;
 }
@@ -59,6 +62,9 @@ export async function getSessionWithUsers(
 
   return {
     id: session.id,
+    radius_meters: session.radius_meters,
+    price_filter: session.price_filter,
+    category_filter: session.category_filter,
     participants: members.map((m: any) => ({ id: m.user_id })),
     user_locations: session.user_locations || {},
   };

@@ -38,6 +38,9 @@ export interface FriendRespondPayload {
 
 export interface FriendWithProfile extends Friendship {
   profile: Profile;
+  online?: boolean;
+  active_session_id?: string | null;
+  active_session_name?: string | null;
 }
 
 // Sessions
@@ -63,12 +66,18 @@ export interface SwipeResponse {
   swipe_id: string;
   is_match: boolean;
   match?: Match;
+  user_swipe_count?: number;
+  session_completed?: boolean;
 }
 
 export interface SessionDetails extends Session {
   members: (SessionMember & { profile: Profile })[];
   restaurant_count: number;
   match_count: number;
+  member_count?: number;
+  user_swipe_count?: number;
+  swiped_restaurant_ids?: string[];
+  is_current_user_done?: boolean;
 }
 
 export interface SessionResults {

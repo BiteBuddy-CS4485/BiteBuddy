@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedClient } from '@/lib/auth';
-import { searchRestaurants, mapPriceFilter } from '@/lib/yelp';
+import { searchRestaurants, mapPriceFilter, mapCategoryFilter } from '@/lib/yelp';
 
 export async function POST(
   request: NextRequest,
@@ -32,6 +32,7 @@ export async function POST(
 
   // Fetch restaurants from Google Places
   const priceLevels = mapPriceFilter(session.price_filter);
+  const includedTypes = mapCategoryFilter(session.category_filter);
 
   let businesses;
   try {
@@ -40,6 +41,7 @@ export async function POST(
       longitude: session.longitude,
       radius: session.radius_meters,
       priceLevels,
+      includedTypes,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Google Places API error';

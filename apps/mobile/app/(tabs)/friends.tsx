@@ -1,13 +1,22 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, FlatList, StyleSheet,
-  ActivityIndicator, Alert, SectionList, RefreshControl,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { apiGet, apiPost } from '../../lib/api';
-import { FriendCard } from '../../components/FriendCard';
 import type { Profile, FriendWithProfile } from '@bitebuddy/shared';
+
+function formatPresence(friend: FriendWithProfile): string {
+  return friend.online || !!friend.active_session_id ? 'Online' : 'Offline';
+}
 
 export default function FriendsScreen() {
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
@@ -16,17 +25,17 @@ export default function FriendsScreen() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [pendingUsernames, setPendingUsernames] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<TextInput | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      loadFriends();
+      void loadFriends();
     }, [])
   );
 
@@ -40,23 +49,16 @@ export default function FriendsScreen() {
       setFriends(friendsData ?? []);
       setRequests(requestsData ?? []);
       setSentRequests(sentData ?? []);
+      setPendingUsernames(new Set((sentData ?? []).map((item) => item.profile?.username).filter(Boolean)));
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load friends');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
-  }
-
-  function onRefresh() {
-    setRefreshing(true);
-    loadFriends();
   }
 
   function onSearchChange(text: string) {
     setSearchQuery(text);
-    setSearchError('');
-
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (text.length < 2) {
@@ -68,33 +70,40 @@ export default function FriendsScreen() {
 
     setSearching(true);
     debounceRef.current = setTimeout(() => {
-      performSearch(text);
-    }, 400);
+      void performSearch(text);
+    }, 350);
   }
 
   async function performSearch(text: string) {
     try {
       const data = await apiGet<Profile[]>(`/api/friends/search?q=${encodeURIComponent(text)}`);
       setSearchResults(data ?? []);
-      setHasSearched(true);
-    } catch (err: any) {
-      setSearchError(err.message || 'Search failed');
+    } catch {
       setSearchResults([]);
-      setHasSearched(true);
     } finally {
       setSearching(false);
+      setHasSearched(true);
     }
   }
 
   async function sendRequest(username: string) {
     if (sendingTo) return;
     setSendingTo(username);
+    setPendingUsernames((prev) => {
+      const next = new Set(prev);
+      next.add(username);
+      return next;
+    });
+
     try {
       await apiPost('/api/friends/request', { username });
-      Alert.alert('Request Sent!', `Friend request sent to @${username}`);
-      // Remove from search results so they can't send again
-      setSearchResults(prev => prev.filter(p => p.username !== username));
+      await loadFriends();
     } catch (err: any) {
+      setPendingUsernames((prev) => {
+        const next = new Set(prev);
+        next.delete(username);
+        return next;
+      });
       Alert.alert('Could not send request', err.message || 'Something went wrong');
     } finally {
       setSendingTo(null);
@@ -106,10 +115,6 @@ export default function FriendsScreen() {
     setRespondingTo(friendshipId);
     try {
       await apiPost('/api/friends/respond', { friendship_id: friendshipId, action });
-      Alert.alert(
-        action === 'accept' ? 'Friend Added!' : 'Request Declined',
-        action === 'accept' ? 'You are now friends!' : 'Friend request declined.',
-      );
       await loadFriends();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to respond');
@@ -118,261 +123,373 @@ export default function FriendsScreen() {
     }
   }
 
-  function clearSearch() {
-    setSearchQuery('');
-    setSearchResults([]);
-    setHasSearched(false);
-    setSearchError('');
-  }
+  const showSearchResults = searchQuery.length >= 2;
+  const showEmptyState = !showSearchResults && friends.length === 0 && requests.length === 0;
 
   if (loading) {
-    return <ActivityIndicator size="large" color="#FF6B35" style={styles.loader} />;
+    return (
+      <View style={styles.loaderWrap}>
+        <ActivityIndicator size="large" color="#ff6f70" />
+      </View>
+    );
   }
 
-  const sections = [
-    ...(requests.length > 0 ? [{ title: 'Pending Requests', data: requests, type: 'request' as const }] : []),
-    ...(sentRequests.length > 0 ? [{ title: 'Sent Requests', data: sentRequests, type: 'sent' as const }] : []),
-    { title: 'Friends', data: friends, type: 'friend' as const },
-  ];
-
-  const showSearchResults = searchQuery.length >= 2;
-
   return (
-    <View style={styles.container}>
-      {/* Search Bar */}
-      <View style={styles.searchBar}>
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Friends</Text>
+        <TouchableOpacity style={styles.headerIcon}>
+          <Ionicons name="add" size={28} color="#ff6f70" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={25} color="#98a2b3" />
         <TextInput
+          ref={searchInputRef}
           style={styles.searchInput}
-          placeholder="Search users by username..."
-          placeholderTextColor="#999"
           value={searchQuery}
           onChangeText={onSearchChange}
+          placeholder="Search by username or name"
+          placeholderTextColor="#98a2b3"
           autoCapitalize="none"
-          autoCorrect={false}
         />
-        {searching ? (
-          <ActivityIndicator size="small" color="#FF6B35" />
-        ) : searchQuery.length > 0 ? (
-          <TouchableOpacity onPress={clearSearch} style={styles.clearBtn}>
-            <Text style={styles.clearBtnText}>Clear</Text>
+        {searchQuery.length > 0 ? (
+          <TouchableOpacity onPress={() => onSearchChange('')}>
+            <Ionicons name="close" size={26} color="#98a2b3" />
           </TouchableOpacity>
         ) : null}
       </View>
 
       {showSearchResults ? (
-        // Search results view
-        <View style={styles.flex1}>
-          {searchError ? (
-            <View style={styles.statusMessage}>
-              <Text style={styles.errorText}>{searchError}</Text>
-              <TouchableOpacity onPress={() => performSearch(searchQuery)} style={styles.retryBtn}>
-                <Text style={styles.retryBtnText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : searching ? (
-            <View style={styles.statusMessage}>
-              <ActivityIndicator size="small" color="#FF6B35" />
-              <Text style={styles.statusText}>Searching...</Text>
-            </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.sectionLabel}>RESULTS FOR '{searchQuery.toUpperCase()}'</Text>
+          {searching ? (
+            <ActivityIndicator color="#ff6f70" style={{ marginTop: 16 }} />
           ) : searchResults.length === 0 && hasSearched ? (
-            <View style={styles.statusMessage}>
-              <Text style={styles.emptyText}>No users found for "{searchQuery}"</Text>
-              <Text style={styles.hintText}>Make sure the username is spelled correctly</Text>
-            </View>
+            <Text style={styles.smallEmpty}>No users found.</Text>
           ) : (
-            <FlatList
-              data={searchResults}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <FriendCard
-                  profile={item}
-                  action={{
-                    label: sendingTo === item.username ? 'Sending...' : 'Add',
-                    onPress: () => sendRequest(item.username),
-                    disabled: sendingTo !== null,
-                  }}
-                />
-              )}
-              contentContainerStyle={styles.list}
-              ListHeaderComponent={
-                <Text style={styles.resultCount}>
-                  {searchResults.length} user{searchResults.length !== 1 ? 's' : ''} found
-                </Text>
-              }
-            />
+            searchResults.map((profile) => {
+              const isPending =
+                pendingUsernames.has(profile.username) ||
+                sentRequests.some((item) => item.profile.id === profile.id);
+              return (
+                <View key={profile.id} style={styles.friendCard}>
+                  <Avatar label={profile.display_name || profile.username} />
+                  <View style={styles.friendMeta}>
+                    <Text style={styles.friendName}>{profile.display_name}</Text>
+                    <Text style={styles.friendSub}>@{profile.username}</Text>
+                  </View>
+
+                  {isPending ? (
+                    <View style={styles.pendingChip}>
+                      <Text style={styles.pendingChipText}>Pending</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={() => sendRequest(profile.username)}
+                      disabled={sendingTo === profile.username}
+                    >
+                      <Text style={styles.addButtonText}>{sendingTo === profile.username ? '...' : '+ Add'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })
           )}
+        </ScrollView>
+      ) : showEmptyState ? (
+        <View style={styles.emptyWrap}>
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="person-add-outline" size={44} color="#ff6f70" />
+          </View>
+          <Text style={styles.emptyTitle}>No friends yet</Text>
+          <Text style={styles.emptySubtitle}>Search by username to get started</Text>
+          <TouchableOpacity
+            style={styles.findButton}
+            onPress={() => {
+              setSearchQuery('');
+              setHasSearched(false);
+              setSearchResults([]);
+              searchInputRef.current?.focus();
+            }}
+          >
+            <Text style={styles.findButtonText}>Find Friends</Text>
+          </TouchableOpacity>
         </View>
       ) : (
-        // Friends & requests list
-        <SectionList
-          sections={sections}
-          keyExtractor={item => item.id}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B35" />
-          }
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>{section.title}</Text>
-              {(section.type === 'request' || section.type === 'sent') && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{section.data.length}</Text>
+        <ScrollView contentContainerStyle={styles.content}>
+          {requests.length > 0 ? (
+            <>
+              <Text style={styles.sectionLabel}>PENDING REQUESTS ({requests.length})</Text>
+              {requests.map((request) => (
+                <View key={request.id} style={styles.friendCard}>
+                  <Avatar label={request.profile.display_name} />
+                  <View style={styles.friendMeta}>
+                    <Text style={styles.friendName}>{request.profile.display_name}</Text>
+                    <Text style={styles.friendSub}>@{request.profile.username}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.acceptButton}
+                    onPress={() => respondToRequest(request.id, 'accept')}
+                    disabled={respondingTo === request.id}
+                  >
+                    <Text style={styles.acceptButtonText}>{respondingTo === request.id ? '...' : 'Accept'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.declineButton}
+                    onPress={() => respondToRequest(request.id, 'decline')}
+                    disabled={respondingTo === request.id}
+                  >
+                    <Text style={styles.declineButtonText}>Decline</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
+              ))}
+            </>
+          ) : null}
+
+          <Text style={styles.sectionLabel}>MY FRIENDS ({friends.length})</Text>
+          {friends.map((friend, index) => (
+            <View key={friend.id} style={styles.friendCard}>
+              <Avatar label={friend.profile.display_name || friend.profile.username}>
+                <View style={[styles.statusDot, { backgroundColor: friend.online || friend.active_session_id ? '#14b858' : '#98a2b3' }]} />
+              </Avatar>
+              <View style={styles.friendMeta}>
+                <Text style={styles.friendName}>{friend.profile.display_name}</Text>
+                <Text style={styles.friendSub}>{formatPresence(friend)}</Text>
+              </View>
+              <Ionicons name="menu" size={30} color="#98a2b3" />
             </View>
-          )}
-          renderItem={({ item, section }) =>
-            section.type === 'request' ? (
-              <FriendCard
-                profile={item.profile}
-                action={{
-                  label: respondingTo === item.id ? '...' : 'Accept',
-                  onPress: () => respondToRequest(item.id, 'accept'),
-                  disabled: respondingTo !== null,
-                }}
-                secondaryAction={{
-                  label: respondingTo === item.id ? '...' : 'Decline',
-                  onPress: () => respondToRequest(item.id, 'decline'),
-                  color: '#dc3545',
-                  disabled: respondingTo !== null,
-                }}
-              />
-            ) : section.type === 'sent' ? (
-              <FriendCard profile={item.profile} statusLabel="Pending" />
-            ) : (
-              <FriendCard profile={item.profile} />
-            )
-          }
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No friends yet</Text>
-              <Text style={styles.emptyText}>Search for users above to add friends!</Text>
-            </View>
-          }
-        />
+          ))}
+        </ScrollView>
       )}
     </View>
   );
 }
 
+function Avatar({ label, children }: { label: string; children?: React.ReactNode }) {
+  return (
+    <View style={styles.avatarWrap}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{label.charAt(0).toUpperCase()}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#f3f4f6',
   },
-  flex1: {
+  loaderWrap: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
   },
-  loader: {
-    flex: 1,
-  },
-  searchBar: {
+  header: {
+    height: 94,
+    backgroundColor: '#f8fafb',
+    borderBottomColor: '#e9edf1',
+    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    marginLeft: 38,
+    color: '#101828',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  headerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffe9ea',
+  },
+  searchWrap: {
+    margin: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    color: '#344054',
+    fontSize: 17,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+  },
+  sectionLabel: {
+    marginBottom: 10,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#667085',
+    letterSpacing: 0.8,
+  },
+  friendCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
     padding: 12,
-    fontSize: 15,
-    color: '#1a1a1a',
-    marginRight: 8,
-  },
-  clearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  clearBtnText: {
-    color: '#FF6B35',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  list: {
-    padding: 16,
-  },
-  sectionHeaderRow: {
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 8,
+    gap: 10,
   },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  avatarWrap: {
+    position: 'relative',
   },
-  badge: {
-    backgroundColor: '#FF6B35',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+  avatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
-    paddingHorizontal: 6,
+    backgroundColor: '#6b7788',
   },
-  badgeText: {
+  avatarText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 33,
     fontWeight: '700',
   },
-  resultCount: {
-    fontSize: 13,
-    color: '#888',
-    marginBottom: 12,
+  statusDot: {
+    position: 'absolute',
+    right: 1,
+    bottom: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderColor: '#fff',
+    borderWidth: 2,
   },
-  statusMessage: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    gap: 8,
+  friendMeta: {
+    flex: 1,
   },
-  statusText: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
+  friendName: {
+    color: '#101828',
+    fontWeight: '700',
+    fontSize: 20,
   },
-  errorText: {
-    fontSize: 15,
-    color: '#dc3545',
-    textAlign: 'center',
+  friendSub: {
+    color: '#667085',
+    fontSize: 16,
+    marginTop: 2,
   },
-  hintText: {
-    fontSize: 13,
-    color: '#aaa',
-    marginTop: 4,
-  },
-  retryBtn: {
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 20,
+  acceptButton: {
+    borderRadius: 18,
+    backgroundColor: '#ff6f70',
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 8,
   },
-  retryBtnText: {
+  acceptButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 15,
   },
-  empty: {
-    paddingVertical: 40,
+  declineButton: {
+    borderRadius: 18,
+    backgroundColor: '#eaecf0',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  declineButtonText: {
+    color: '#344054',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  addButton: {
+    borderRadius: 18,
+    backgroundColor: '#ff6f70',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  pendingChip: {
+    borderRadius: 18,
+    backgroundColor: '#eaecf0',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  pendingChipText: {
+    color: '#667085',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  emptyWrap: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    marginTop: -90,
+  },
+  emptyIconCircle: {
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffe9ea',
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
+    marginTop: 24,
+    color: '#101828',
+    fontWeight: '800',
+    fontSize: 49,
+    lineHeight: 52,
+    textAlign: 'center',
   },
-  emptyText: {
-    fontSize: 15,
-    color: '#888',
+  emptySubtitle: {
+    marginTop: 10,
+    color: '#475467',
+    fontSize: 22,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
+  findButton: {
+    marginTop: 26,
+    borderRadius: 26,
+    backgroundColor: '#ff815f',
+    paddingHorizontal: 38,
+    paddingVertical: 16,
+    shadowColor: '#7d4b3b',
+    shadowOpacity: 0.24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  findButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 19,
+  },
+  smallEmpty: {
+    marginTop: 16,
+    color: '#667085',
+    fontSize: 16,
   },
 });

@@ -24,7 +24,15 @@ export async function POST(
 
   const { data, error } = await supabase
     .from('session_members')
-    .upsert({ session_id: id, user_id: user.id }, { onConflict: 'session_id,user_id' })
+    .upsert(
+      {
+        session_id: id,
+        user_id: user.id,
+        invited: false,
+        joined_at: new Date().toISOString(),
+      },
+      { onConflict: 'session_id,user_id' }
+    )
     .select()
     .single();
 

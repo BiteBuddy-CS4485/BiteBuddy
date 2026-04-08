@@ -1,63 +1,65 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Image, Platform,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import { Ionicons } from '@expo/vector-icons';
 import { apiGet, apiPost, joinSessionWithLocation } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { SessionDetails } from '@bitebuddy/shared';
+import SessionMap from '../../../components/SessionMap';
 
 export default function LobbyScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
+
   const [session, setSession] = useState<SessionDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [locationSubmitted, setLocationSubmitted] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   async function submitUserLocation() {
     try {
       const getCoordinates = async (): Promise<{ latitude: number; longitude: number }> => {
         if (Platform.OS === 'web') {
-          // Use browser geolocation API on web
           return new Promise((resolve, reject) => {
-            if (navigator.geolocation) {
-              navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                  resolve({
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude,
-                  });
-                },
-                reject
-              );
-            } else {
+            if (!navigator.geolocation) {
               reject(new Error('Geolocation not supported'));
+              return;
             }
+            navigator.geolocation.getCurrentPosition(
+              (position) =>
+                resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+              reject
+            );
           });
-        } else {
-          // Use expo-location on mobile
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') {
-            throw new Error('Location permission denied');
-          }
-          const loc = await Location.getCurrentPositionAsync({});
-          return {
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          };
         }
+
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          throw new Error('Location permission denied');
+        }
+        const loc = await Location.getCurrentPositionAsync({});
+        return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       };
 
       const { latitude, longitude } = await getCoordinates();
-
-      // Join session with location
       await joinSessionWithLocation(id!, latitude, longitude);
       setLocationSubmitted(true);
+      setUserLocation({ latitude, longitude });
     } catch (err: any) {
       if (err.message !== 'Location permission denied') {
         Alert.alert('Location Error', err.message || 'Failed to get location');
@@ -77,57 +79,64 @@ export default function LobbyScreen() {
   }
 
   useEffect(() => {
-    loadSession();
-    // Submit location when entering lobby (if not already submitted)
+    void loadSession();
     if (!locationSubmitted) {
-      submitUserLocation();
+      void submitUserLocation();
     }
   }, [id]);
 
-  // Realtime: listen for new members joining
   useEffect(() => {
     const channel = supabase
       .channel(`lobby-${id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'session_members',
-        filter: `session_id=eq.${id}`,
-      }, () => {
-        loadSession();
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'sessions',
-        filter: `id=eq.${id}`,
-      }, (payload) => {
-        if (payload.new && (payload.new as any).status === 'active') {
-          router.replace(`/session/${id}/swipe`);
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'session_members',
+          filter: `session_id=eq.${id}`,
+        },
+        () => {
+          void loadSession();
         }
-      })
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'session_members',
+          filter: `session_id=eq.${id}`,
+        },
+        () => {
+          void loadSession();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).status === 'active' && !starting) {
+            router.replace(`/session/${id}/swipe`);
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, starting]);
 
   async function handleStart() {
     setStarting(true);
     try {
       await apiPost(`/api/sessions/${id}/start`);
-      // Discover restaurants based on user locations
-      try {
-        await apiPost(`/api/sessions/${id}/discover`, {
-          search_radius: session?.radius_meters ? session.radius_meters / 1000 : 1,
-          dietary_restrictions: [],
-          preferences: {},
-        });
-      } catch (err) {
-        console.warn('Failed to auto-discover restaurants:', err);
-        // Don't fail the session start if discovery fails
-      }
       router.replace(`/session/${id}/swipe`);
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -135,180 +144,321 @@ export default function LobbyScreen() {
     }
   }
 
+  const isCreator = useMemo(
+    () => session?.created_by === user?.id,
+    [session?.created_by, user?.id]
+  );
+
   if (loading || !session) {
-    return <ActivityIndicator size="large" color="#FF6B35" style={styles.loader} />;
+    return (
+      <View style={styles.loaderWrap}>
+        <ActivityIndicator size="large" color="#ff6f70" />
+      </View>
+    );
   }
 
-  const isCreator = session.created_by === user?.id;
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{session.name}</Text>
-      <Text style={styles.subtitle}>Waiting for everyone to join...</Text>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerIcon} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={26} color="#475569" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Session Setup</Text>
+        <TouchableOpacity style={styles.headerIcon} onPress={() => router.push('/(tabs)/profile')}>
+          <Ionicons name="settings-outline" size={24} color="#ff6f70" />
+        </TouchableOpacity>
+      </View>
 
-      <Text style={styles.sectionTitle}>
-        Members ({session.members.length})
-      </Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sessionName}>{session.name || 'Session'}</Text>
 
-      <FlatList
-        data={session.members}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.memberRow}>
-            {item.profile?.avatar_url ? (
-              <Image source={{ uri: item.profile.avatar_url }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {(item.profile?.display_name ?? '?').charAt(0).toUpperCase()}
+        <Text style={styles.sectionLabel}>MAP</Text>
+        <View style={styles.mapCard}>
+          {userLocation ? (
+            <SessionMap
+              latitude={userLocation.latitude}
+              longitude={userLocation.longitude}
+              style={styles.map}
+            />
+          ) : (
+            <View style={styles.mapFallback}>
+              <ActivityIndicator color="#ff6f70" />
+            </View>
+          )}
+          <View style={styles.mapPin}>
+            <Ionicons name="radio-button-on" size={26} color="#ff6f70" />
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>SESSION SETTINGS</Text>
+        <View style={styles.settingsCard}>
+          <View style={styles.settingCol}>
+            <Text style={styles.settingLabel}>Radius</Text>
+            <Text style={styles.settingValue}>
+              {session.radius_meters ? `${(session.radius_meters / 1609.34).toFixed(1)} mi` : '1.5 mi'}
+            </Text>
+          </View>
+          <View style={styles.settingCol}>
+            <Text style={styles.settingLabel}>Price</Text>
+            <Text style={styles.settingValue}>
+              {Array.isArray(session.price_filter) && session.price_filter.length > 0
+                ? `${session.price_filter[0]} - ${session.price_filter[session.price_filter.length - 1]}`
+                : '$ - $$$'}
+            </Text>
+          </View>
+          <View style={styles.settingCol}>
+            <Text style={styles.settingLabel}>Category</Text>
+            <Text style={styles.settingValue}>{session.category_filter || 'All'}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>PARTICIPANTS ({session.members.length})</Text>
+        {session.members.map((member, index) => {
+          const displayName = member.profile?.display_name || member.profile?.username || `User ${index + 1}`;
+          const isHost = member.user_id === session.created_by;
+          const isMe = member.user_id === user?.id;
+          const joined = !(member as any).invited;
+          const status = joined ? 'Ready' : 'Pending';
+
+          return (
+            <View key={member.id} style={styles.memberCard}>
+              {member.profile?.avatar_url ? (
+                <Image source={{ uri: member.profile.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+
+              <View style={styles.memberMeta}>
+                <Text style={styles.memberName}>{displayName}{isMe ? ' (You)' : ''}</Text>
+                <Text style={styles.memberRole}>{isHost ? 'Host' : joined ? 'Joined' : 'Invited'}</Text>
+              </View>
+
+              <View style={[styles.memberPill, joined ? styles.readyPill : styles.pendingPill]}>
+                <Text style={[styles.memberPillText, joined ? styles.readyPillText : styles.pendingPillText]}>
+                  {status}
                 </Text>
               </View>
-            )}
-            <View>
-              <Text style={styles.memberName}>{item.profile?.display_name ?? 'Unknown'}</Text>
-              <Text style={styles.memberUsername}>@{item.profile?.username ?? ''}</Text>
             </View>
-            {item.user_id === session.created_by && (
-              <Text style={styles.creatorBadge}>Creator</Text>
-            )}
+          );
+        })}
+      </ScrollView>
+
+      <View style={styles.bottomBar}>
+        {isCreator ? (
+          <TouchableOpacity style={styles.startButton} onPress={handleStart} disabled={starting}>
+            <Text style={styles.startButtonText}>{starting ? 'Starting...' : 'Start Swiping →'}</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingText}>Waiting for host to start...</Text>
           </View>
         )}
-        contentContainerStyle={styles.list}
-      />
-
-      {isCreator && (
-        <TouchableOpacity
-          style={[styles.startButton, starting && styles.buttonDisabled]}
-          onPress={handleStart}
-          disabled={starting}
-        >
-          {starting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.startButtonText}>Start Session</Text>
-          )}
-        </TouchableOpacity>
-      )}
-
-      {!isCreator && (
-        <View style={styles.waitingBar}>
-          <Text style={styles.waitingText}>Waiting for the host to start...</Text>
-        </View>
-      )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f3f4f6',
   },
-  loader: {
+  loaderWrap: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#888',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 24,
-    marginBottom: 8,
-  },
-  list: {
-    paddingHorizontal: 24,
-  },
-  memberRow: {
+  header: {
+    height: 94,
+    backgroundColor: '#f8fafb',
+    borderBottomColor: '#e9edf1',
+    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eaecf0',
+  },
+  headerTitle: {
+    color: '#101828',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 130,
+  },
+  sessionName: {
+    color: '#101828',
+    fontSize: 42,
+    lineHeight: 46,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    marginBottom: 10,
+    fontSize: 13,
+    letterSpacing: 0.9,
+    color: '#667085',
+    fontWeight: '700',
+  },
+  mapCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#c2ebd0',
+    marginBottom: 22,
+    position: 'relative',
+  },
+  map: {
+    width: '100%',
+    height: 160,
+  },
+  mapFallback: {
+    width: '100%',
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPin: {
+    position: 'absolute',
+    top: 64,
+    left: '50%',
+    marginLeft: -13,
+  },
+  settingsCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 22,
+  },
+  settingCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  settingLabel: {
+    color: '#667085',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  settingValue: {
+    color: '#101828',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  memberCard: {
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FF6B35',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#6b7788',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     marginRight: 12,
   },
   avatarText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: '700',
+    fontSize: 22,
+  },
+  memberMeta: {
+    flex: 1,
   },
   memberName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#101828',
+    fontWeight: '700',
+    fontSize: 18,
   },
-  memberUsername: {
-    fontSize: 13,
-    color: '#888',
+  memberRole: {
+    marginTop: 2,
+    color: '#667085',
+    fontSize: 14,
   },
-  creatorBadge: {
-    marginLeft: 'auto',
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FF6B35',
-    backgroundColor: '#FFF0E8',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+  memberPill: {
+    borderRadius: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+  },
+  memberPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  readyPill: {
+    backgroundColor: '#d9f3e3',
+  },
+  readyPillText: {
+    color: '#0f8a40',
+  },
+  pendingPill: {
+    backgroundColor: '#eaecf0',
+  },
+  pendingPillText: {
+    color: '#667085',
+  },
+  bottomBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
   },
   startButton: {
-    position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
-    backgroundColor: '#FF6B35',
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: '#ff7b67',
+    borderRadius: 30,
+    paddingVertical: 20,
     alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
+    shadowColor: '#7d4b3b',
+    shadowOpacity: 0.24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    elevation: 5,
   },
   startButtonText: {
     color: '#fff',
-    fontSize: 17,
     fontWeight: '700',
+    fontSize: 30,
+    lineHeight: 34,
   },
-  waitingBar: {
-    position: 'absolute',
-    bottom: 32,
-    left: 24,
-    right: 24,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 14,
-    padding: 16,
+  waitingCard: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     alignItems: 'center',
   },
   waitingText: {
-    color: '#888',
-    fontSize: 15,
-    fontWeight: '500',
+    color: '#667085',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
