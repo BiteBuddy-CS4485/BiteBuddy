@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Image, Share,
+  ActivityIndicator, Alert, Image, Share, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { apiGet, apiPost, apiDelete } from '../../../lib/api';
+import * as Location from 'expo-location';
+import { apiGet, apiPost, apiDelete, joinSessionWithLocation } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { SessionDetails } from '@bitebuddy/shared';
@@ -19,6 +20,39 @@ export default function LobbyScreen() {
   const [confirming, setConfirming] = useState<'cancel' | 'leave' | null>(null);
   const [actioning, setActioning] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [locationSubmitted, setLocationSubmitted] = useState(false);
+
+  async function submitUserLocation() {
+    try {
+      const getCoordinates = async (): Promise<{ latitude: number; longitude: number }> => {
+        if (Platform.OS === 'web') {
+          return new Promise((resolve, reject) => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                reject
+              );
+            } else {
+              reject(new Error('Geolocation not supported'));
+            }
+          });
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') throw new Error('Location permission denied');
+          const loc = await Location.getCurrentPositionAsync({});
+          return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        }
+      };
+
+      const { latitude, longitude } = await getCoordinates();
+      await joinSessionWithLocation(id!, latitude, longitude);
+      setLocationSubmitted(true);
+    } catch (err: any) {
+      if (err.message !== 'Location permission denied') {
+        Alert.alert('Location Error', err.message || 'Failed to get location');
+      }
+    }
+  }
 
   async function loadSession() {
     try {
@@ -31,7 +65,12 @@ export default function LobbyScreen() {
     }
   }
 
-  useEffect(() => { loadSession(); }, [id]);
+  useEffect(() => {
+    loadSession();
+    if (!locationSubmitted) {
+      submitUserLocation();
+    }
+  }, [id]);
 
   useEffect(() => {
     const channel = supabase
@@ -86,6 +125,17 @@ export default function LobbyScreen() {
     setStarting(true);
     try {
       await apiPost(`/api/sessions/${id}/start`);
+      // Discover restaurants based on all users' locations before navigating
+      try {
+        await apiPost(`/api/sessions/${id}/discover`, {
+          search_radius: session?.radius_meters ? session.radius_meters / 1000 : 1,
+          dietary_restrictions: [],
+          preferences: {},
+        });
+      } catch (err) {
+        console.warn('Failed to auto-discover restaurants:', err);
+        // Don't fail the session start if discovery fails
+      }
       router.replace(`/session/${id}/swipe`);
     } catch (err: any) {
       console.error('handleStart:', err);
