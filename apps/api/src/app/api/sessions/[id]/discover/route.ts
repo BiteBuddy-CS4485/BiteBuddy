@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateCentroid, calculateDistance } from '@bitebuddy/shared';
-import {
-  getSessionWithUsers,
-  updateSessionRestaurants,
-} from '@/lib/supabase';
+import { getSessionWithUsers } from '@/lib/supabase';
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -26,7 +23,6 @@ interface GooglePlacesResult {
   types?: string[];
   vicinity?: string;
   price_level?: number;
-  photos?: Array<{ photo_reference: string }>;
 }
 
 interface SessionLocation {
@@ -121,8 +117,6 @@ export async function POST(
         return allUsersReachable && meetsRating;
       }
     );
-
-    await updateSessionRestaurants(id, filteredRestaurants, accessToken);
 
     return NextResponse.json({
       centroid,

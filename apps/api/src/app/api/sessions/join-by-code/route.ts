@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
   }
 
+  if (session.status === 'active') {
+    return NextResponse.json({ error: 'Swiping has already started — you can\'t join mid-session' }, { status: 410 });
+  }
+
   if (session.status === 'completed' || session.status === 'cancelled') {
     return NextResponse.json({ error: 'This session has already ended' }, { status: 410 });
   }

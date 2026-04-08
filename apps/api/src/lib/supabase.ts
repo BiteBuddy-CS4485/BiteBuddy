@@ -61,71 +61,20 @@ export async function getSessionWithUsers(
 
 export async function storeUserLocation(
   sessionId: string,
-  userId: string,
+  _userId: string,
   latitude: number,
   longitude: number,
   accessToken: string
 ): Promise<void> {
   const client = createServerClient(accessToken);
 
-  const { data: session, error: fetchError } = await client
-    .from('sessions')
-    .select('user_locations')
-    .eq('id', sessionId)
-    .single();
+  // Uses a security-definer RPC so any session member can write their own
+  // location slot without needing UPDATE permission on the sessions table.
+  const { error } = await client.rpc('store_user_location', {
+    p_session_id: sessionId,
+    p_lat:        latitude,
+    p_lng:        longitude,
+  });
 
-  if (fetchError) throw fetchError;
-
-  const userLocations = session.user_locations || {};
-  userLocations[userId] = {
-    lat: latitude,
-    lng: longitude,
-    timestamp: new Date().toISOString(),
-  };
-
-  const { error: updateError } = await client
-    .from('sessions')
-    .update({ user_locations: userLocations })
-    .eq('id', sessionId);
-
-  if (updateError) throw updateError;
-}
-
-export async function updateSessionRestaurants(
-  sessionId: string,
-  restaurants: any[],
-  accessToken: string
-): Promise<void> {
-  const client = createServerClient(accessToken);
-
-  await client
-    .from('session_restaurants')
-    .delete()
-    .eq('session_id', sessionId);
-
-  const restaurantsToInsert = restaurants.map((r: any) => ({
-    session_id: sessionId,
-    yelp_id: r.place_id,
-    name: r.name,
-    image_url: r.photos?.[0]?.photo_reference
-      ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${r.photos[0].photo_reference}&key=${process.env.GOOGLE_PLACES_API_KEY}`
-      : null,
-    rating: r.rating || null,
-    review_count: r.user_ratings_total || 0,
-    price: r.price_level ? '$'.repeat(r.price_level) : null,
-    categories: JSON.stringify(r.types || []),
-    address: r.vicinity || null,
-    latitude: r.geometry.location.lat,
-    longitude: r.geometry.location.lng,
-    phone: r.formatted_phone_number || null,
-    yelp_url: r.url || r.website || null,
-  }));
-
-  if (restaurantsToInsert.length > 0) {
-    const { error } = await client
-      .from('session_restaurants')
-      .insert(restaurantsToInsert);
-
-    if (error) throw error;
-  }
+  if (error) throw error;
 }
