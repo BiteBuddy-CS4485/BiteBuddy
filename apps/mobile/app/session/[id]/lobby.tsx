@@ -1,13 +1,93 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert, Image, Share,
+  ActivityIndicator, Alert, Image, Share, Platform,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { apiGet, apiPost, apiDelete } from '../../../lib/api';
+import * as Location from 'expo-location';
+import { apiGet, apiPost, apiDelete, joinSessionWithLocation } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { SessionDetails } from '@bitebuddy/shared';
+
+interface UserLocation { lat: number; lng: number; timestamp: string; }
+
+function LobbyMap({
+  userLocations,
+  radiusMeters,
+}: {
+  userLocations: Record<string, UserLocation>;
+  radiusMeters: number;
+}) {
+  const locs = Object.values(userLocations).filter(l => l && typeof l.lat === 'number' && typeof l.lng === 'number');
+  if (locs.length === 0) return null;
+
+  const centLat = locs.reduce((s, l) => s + l.lat, 0) / locs.length;
+  const centLng = locs.reduce((s, l) => s + l.lng, 0) / locs.length;
+
+  const markersJS = locs
+    .map(l =>
+      `L.circleMarker([${l.lat},${l.lng}],{radius:6,color:'#FF6B35',fillColor:'#FF6B35',fillOpacity:0.85,weight:2}).addTo(map);`
+    )
+    .join('\n');
+
+  const html = `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#f0efe9;}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{zoomControl:false,attributionControl:false}).setView([${centLat},${centLng}],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+var circle=L.circle([${centLat},${centLng}],{
+  radius:${radiusMeters},
+  color:'#FF6B35',fillColor:'#FF6B35',fillOpacity:0.12,weight:2
+}).addTo(map);
+L.circleMarker([${centLat},${centLng}],{radius:8,color:'#FF6B35',fillColor:'#fff',fillOpacity:1,weight:3}).addTo(map);
+${markersJS}
+map.fitBounds(circle.getBounds(),{padding:[24,24]});
+</script></body></html>`;
+
+  if (Platform.OS === 'web') {
+    // On web, use a native iframe — react-native-webview on web can
+    // block external CDN resources due to iframe sandboxing.
+    return (
+      <View style={lobbyMapStyles.container}>
+        {/* @ts-ignore — iframe is a valid DOM element on web */}
+        <iframe
+          srcDoc={html}
+          style={{ width: '100%', height: '100%', border: 'none' }}
+          title="Session map"
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={lobbyMapStyles.container}>
+      <WebView
+        source={{ html }}
+        style={lobbyMapStyles.webview}
+        scrollEnabled={false}
+        originWhitelist={['*']}
+      />
+    </View>
+  );
+}
+
+const lobbyMapStyles = StyleSheet.create({
+  container: {
+    height: 200,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  webview: { flex: 1 },
+});
 
 export default function LobbyScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,6 +99,40 @@ export default function LobbyScreen() {
   const [confirming, setConfirming] = useState<'cancel' | 'leave' | null>(null);
   const [actioning, setActioning] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [locationSubmitted, setLocationSubmitted] = useState(false);
+
+  async function submitUserLocation() {
+    try {
+      const getCoordinates = async (): Promise<{ latitude: number; longitude: number }> => {
+        if (Platform.OS === 'web') {
+          return new Promise((resolve, reject) => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                reject
+              );
+            } else {
+              reject(new Error('Geolocation not supported'));
+            }
+          });
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') throw new Error('Location permission denied');
+          const loc = await Location.getCurrentPositionAsync({});
+          return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        }
+      };
+
+      const { latitude, longitude } = await getCoordinates();
+      await joinSessionWithLocation(id!, latitude, longitude);
+      setLocationSubmitted(true);
+      await loadSession();
+    } catch (err: any) {
+      if (err.message !== 'Location permission denied') {
+        Alert.alert('Location Error', err.message || 'Failed to get location');
+      }
+    }
+  }
 
   async function loadSession() {
     try {
@@ -31,7 +145,12 @@ export default function LobbyScreen() {
     }
   }
 
-  useEffect(() => { loadSession(); }, [id]);
+  useEffect(() => {
+    loadSession();
+    if (!locationSubmitted) {
+      submitUserLocation();
+    }
+  }, [id]);
 
   useEffect(() => {
     const channel = supabase
@@ -50,6 +169,8 @@ export default function LobbyScreen() {
         } else if (status === 'cancelled') {
           Alert.alert('Session Cancelled', 'The host has cancelled this session.');
           router.replace('/(tabs)');
+        } else {
+          loadSession();
         }
       })
       .subscribe();
@@ -86,6 +207,17 @@ export default function LobbyScreen() {
     setStarting(true);
     try {
       await apiPost(`/api/sessions/${id}/start`);
+      // Discover restaurants based on all users' locations before navigating
+      try {
+        await apiPost(`/api/sessions/${id}/discover`, {
+          search_radius: session?.radius_meters ? session.radius_meters / 1000 : 1,
+          dietary_restrictions: [],
+          preferences: {},
+        });
+      } catch (err) {
+        console.warn('Failed to auto-discover restaurants:', err);
+        // Don't fail the session start if discovery fails
+      }
       router.replace(`/session/${id}/swipe`);
     } catch (err: any) {
       console.error('handleStart:', err);
@@ -145,6 +277,14 @@ export default function LobbyScreen() {
                   )}
                 </View>
               </>
+            )}
+
+            {/* Location map */}
+            {session.user_locations && Object.keys(session.user_locations).length > 0 && (session.radius_meters ?? 0) > 0 && (
+              <LobbyMap
+                userLocations={session.user_locations as Record<string, UserLocation>}
+                radiusMeters={session.radius_meters}
+              />
             )}
 
             {/* Invite code */}

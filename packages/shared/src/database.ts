@@ -29,6 +29,7 @@ export interface Session {
   invite_code: string | null;
   created_at: string;
   updated_at: string;
+  user_locations?: Record<string, { lat: number; lng: number; timestamp: string }>;
 }
 
 export interface SessionMember {

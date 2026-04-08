@@ -17,24 +17,114 @@ const QUICK_SUGGESTIONS = [
   { label: '☕ Coffee Break', name: 'Coffee Break ☕' },
 ];
 
-type Step = 'details' | 'invite' | 'review';
+// Radius chip values are treated as km internally (multiply ×1000 for meters)
+const RADIUS_OPTIONS = ['1', '2', '5', '10'];
+
+type Step = 'details' | 'invite';
+
+function RadiusMap({ radiusKm }: { radiusKm: string }) {
+  const r = parseFloat(radiusKm) || 5;
+  // Scale rings relative to max option (10)
+  const scale = r / 10;
+  const SIZE = 180;
+  const center = SIZE / 2;
+
+  return (
+    <View style={mapStyles.wrapper}>
+      <View style={[mapStyles.container, { width: SIZE, height: SIZE }]}>
+        {/* Outer ring — full radius boundary */}
+        <View style={[mapStyles.ring, { width: SIZE, height: SIZE, borderRadius: SIZE / 2, opacity: 0.15 }]} />
+        {/* Mid ring */}
+        <View style={[
+          mapStyles.ring,
+          {
+            width: SIZE * scale,
+            height: SIZE * scale,
+            borderRadius: (SIZE * scale) / 2,
+            opacity: 0.25,
+          },
+        ]} />
+        {/* Inner filled circle */}
+        <View style={[
+          mapStyles.innerCircle,
+          {
+            width: SIZE * scale * 0.5,
+            height: SIZE * scale * 0.5,
+            borderRadius: (SIZE * scale * 0.5) / 2,
+          },
+        ]} />
+        {/* Center dot = user */}
+        <View style={mapStyles.centerDot} />
+      </View>
+      <Text style={mapStyles.label}>{r} mi search radius</Text>
+      <Text style={mapStyles.sublabel}>Restaurants within this area will be shown</Text>
+    </View>
+  );
+}
+
+const mapStyles = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  ring: {
+    position: 'absolute',
+    backgroundColor: '#FF6B35',
+    borderWidth: 2,
+    borderColor: '#FF6B35',
+  },
+  innerCircle: {
+    position: 'absolute',
+    backgroundColor: '#FF6B35',
+    opacity: 0.35,
+  },
+  centerDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FF6B35',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#FF6B35',
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+    zIndex: 10,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  sublabel: {
+    fontSize: 12,
+    color: '#888',
+  },
+});
 
 export default function CreateSessionScreen() {
   const router = useRouter();
 
-  // Step 1
+  // Step 1 fields
   const [name, setName] = useState('');
   const [priceFilter, setPriceFilter] = useState<string[]>([]);
   const [category, setCategory] = useState('');
   const [radiusKm, setRadiusKm] = useState('5');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Step 2
+  // Step 2 fields
   const [friends, setFriends] = useState<FriendWithProfile[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [friendSearch, setFriendSearch] = useState('');
 
-  // Step 3 / result
+  // Session result (set after creation)
   const [sessionId, setSessionId] = useState<string>('');
   const [inviteCode, setInviteCode] = useState<string>('');
 
@@ -90,7 +180,7 @@ export default function CreateSessionScreen() {
         name: name.trim(),
         latitude: location.lat,
         longitude: location.lng,
-        radius_meters: Math.round(parseFloat(radiusKm || '5') * 1000),
+        radius_meters: Math.round(parseFloat(radiusKm || '5') * 1609.34),
         price_filter: priceFilter.length > 0 ? priceFilter : undefined,
         category_filter: category.trim() || undefined,
       });
@@ -106,13 +196,21 @@ export default function CreateSessionScreen() {
           Alert.alert('Note', `Session created but could not invite all friends: ${err.message}`);
         }
       }
-
-      router.replace(`/session/${session.id}/lobby`);
     } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Failed to create session');
       console.error('handleCreate:', err);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleShare() {
+    if (!inviteCode) return;
+    try {
+      await Share.share({
+        message: `Join my BiteBuddy session "${name}"!\nUse invite code: ${inviteCode}`,
+      });
+    } catch { /* dismissed */ }
   }
 
   function togglePrice(price: string) {
@@ -130,7 +228,7 @@ export default function CreateSessionScreen() {
     });
   }
 
-  const stepNumber = step === 'details' ? 1 : step === 'invite' ? 2 : 3;
+  const stepNumber = step === 'details' ? 1 : 2;
   const filteredFriends = friends.filter(f => {
     if (!friendSearch.trim()) return true;
     const q = friendSearch.toLowerCase();
@@ -150,8 +248,9 @@ export default function CreateSessionScreen() {
           style={styles.headerBtn}
           onPress={() => {
             if (step === 'details') router.back();
-            else if (step === 'invite') setStep('details');
-            else setStep('invite');
+            else if (!sessionId) setStep('details');
+            // once session is created, back goes to lobby
+            else router.replace(`/session/${sessionId}/lobby`);
           }}
         >
           <Text style={styles.headerBtnText}>←</Text>
@@ -164,9 +263,9 @@ export default function CreateSessionScreen() {
 
       {/* Progress bar */}
       <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${(stepNumber / 3) * 100}%` }]} />
+        <View style={[styles.progressFill, { width: `${(stepNumber / 2) * 100}%` }]} />
       </View>
-      <Text style={styles.stepLabel}>Step {stepNumber} of 3</Text>
+      <Text style={styles.stepLabel}>Step {stepNumber} of 2</Text>
 
       {/* STEP 1: Details */}
       {step === 'details' && (
@@ -202,7 +301,7 @@ export default function CreateSessionScreen() {
           <View style={styles.prefRow}>
             <Text style={styles.prefRowLabel}>Search Radius</Text>
             <View style={styles.radiusRow}>
-              {['1', '2', '5', '10'].map(r => (
+              {RADIUS_OPTIONS.map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.radiusChip, radiusKm === r && styles.radiusChipActive]}
@@ -215,6 +314,9 @@ export default function CreateSessionScreen() {
               ))}
             </View>
           </View>
+
+          {/* Radius visualization */}
+          <RadiusMap radiusKm={radiusKm} />
 
           <View style={styles.prefRow}>
             <Text style={styles.prefRowLabel}>Price Range</Text>
@@ -253,29 +355,47 @@ export default function CreateSessionScreen() {
         </ScrollView>
       )}
 
-      {/* STEP 2: Invite Friends */}
+      {/* STEP 2: Invite + (after creation) Invite Code */}
       {step === 'invite' && (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.stepTitle}>Invite Friends</Text>
-          <Text style={styles.stepSubtitle}>Who's joining?</Text>
+          <Text style={styles.stepTitle}>
+            {sessionId ? 'Session Created!' : 'Invite Friends'}
+          </Text>
+          <Text style={styles.stepSubtitle}>
+            {sessionId ? 'Share the code below to invite friends' : 'Who\'s joining?'}
+          </Text>
 
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search friends..."
-            placeholderTextColor="#bbb"
-            value={friendSearch}
-            onChangeText={setFriendSearch}
-            autoCapitalize="none"
-          />
+          {/* Invite code — shown after session creation */}
+          {sessionId && inviteCode ? (
+            <TouchableOpacity style={styles.inviteBox} onPress={handleShare} activeOpacity={0.7}>
+              <Text style={styles.inviteLabel}>INVITE CODE</Text>
+              <Text style={styles.inviteCode}>{inviteCode}</Text>
+              <Text style={styles.inviteHint}>Tap to share</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Friends search + list */}
+          {!sessionId && (
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search friends..."
+              placeholderTextColor="#bbb"
+              value={friendSearch}
+              onChangeText={setFriendSearch}
+              autoCapitalize="none"
+            />
+          )}
 
           {selectedFriendsList.length > 0 && (
             <>
-              <Text style={styles.inviteSectionLabel}>SELECTED ({selectedFriendsList.length})</Text>
+              <Text style={styles.inviteSectionLabel}>
+                {sessionId ? 'INVITED' : 'SELECTED'} ({selectedFriendsList.length})
+              </Text>
               {selectedFriendsList.map(f => (
                 <FriendCard
                   key={f.id}
                   profile={f.profile}
-                  action={{
+                  action={sessionId ? undefined : {
                     label: '✕',
                     onPress: () => toggleFriend(f.profile.id),
                     color: '#e0e0e0',
@@ -285,7 +405,7 @@ export default function CreateSessionScreen() {
             </>
           )}
 
-          {unselectedFriends.length > 0 && (
+          {!sessionId && unselectedFriends.length > 0 && (
             <>
               <Text style={styles.inviteSectionLabel}>YOUR FRIENDS</Text>
               {unselectedFriends.map(f => (
@@ -302,74 +422,8 @@ export default function CreateSessionScreen() {
             </>
           )}
 
-          {friends.length === 0 && (
+          {!sessionId && friends.length === 0 && (
             <Text style={styles.noFriendsText}>No friends to invite. You can skip this step.</Text>
-          )}
-
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      )}
-
-      {/* STEP 3: Review */}
-      {step === 'review' && (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.stepTitle}>Ready?</Text>
-          <Text style={styles.stepSubtitle}>Review your session details</Text>
-
-          <View style={styles.reviewCard}>
-            <Text style={styles.reviewSessionName}>{name}</Text>
-            <Text style={styles.reviewDetail}>
-              {radiusKm} mi radius
-              {priceFilter.length > 0 ? ` · ${priceFilter.join(', ')}` : ''}
-            </Text>
-            {category ? <Text style={styles.reviewDetail}>{category}</Text> : null}
-
-            <View style={styles.reviewTagRow}>
-              <View style={styles.reviewTag}>
-                <Text style={styles.reviewTagText}>
-                  {selectedFriends.size} friend{selectedFriends.size !== 1 ? 's' : ''} invited
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.editTag}
-                onPress={() => setStep('invite')}
-              >
-                <Text style={styles.editTagText}>Edit</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Participants preview */}
-          <Text style={styles.participantsLabel}>PARTICIPANTS ({selectedFriends.size + 1})</Text>
-          <View style={styles.participantRow}>
-            <View style={styles.participantAvatar}>
-              <Text style={styles.participantAvatarText}>Y</Text>
-            </View>
-            <View>
-              <Text style={styles.participantName}>You (Host)</Text>
-              <Text style={styles.participantStatus}>Ready</Text>
-            </View>
-          </View>
-          {selectedFriendsList.map(f => (
-            <View key={f.id} style={styles.participantRow}>
-              <View style={styles.participantAvatar}>
-                <Text style={styles.participantAvatarText}>
-                  {f.profile.display_name?.charAt(0).toUpperCase() ?? '?'}
-                </Text>
-              </View>
-              <View>
-                <Text style={styles.participantName}>{f.profile.display_name}</Text>
-                <Text style={styles.participantStatus}>Pending invite</Text>
-              </View>
-            </View>
-          ))}
-
-          <Text style={styles.reviewNote}>
-            Friends will be notified and can join when ready.
-          </Text>
-
-          {!location && (
-            <Text style={styles.locationWarning}>Still getting your location...</Text>
           )}
 
           <View style={{ height: 100 }} />
@@ -391,16 +445,7 @@ export default function CreateSessionScreen() {
             }
           </TouchableOpacity>
         )}
-        {step === 'invite' && (
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            onPress={() => setStep('review')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.ctaBtnText}>Next: Review →</Text>
-          </TouchableOpacity>
-        )}
-        {step === 'review' && (
+        {step === 'invite' && !sessionId && (
           <TouchableOpacity
             style={[styles.ctaBtn, (loading || !location) && styles.ctaBtnDisabled]}
             onPress={handleCreate}
@@ -411,6 +456,15 @@ export default function CreateSessionScreen() {
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.ctaBtnText}>Create Session</Text>
             }
+          </TouchableOpacity>
+        )}
+        {step === 'invite' && !!sessionId && (
+          <TouchableOpacity
+            style={styles.ctaBtn}
+            onPress={() => router.replace(`/session/${sessionId}/lobby`)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaBtnText}>Go to Lobby →</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -597,7 +651,34 @@ const styles = StyleSheet.create({
     color: '#f0ad4e',
     marginTop: 8,
   },
-  // Step 2
+  // Step 2 — invite
+  inviteBox: {
+    marginBottom: 24,
+    backgroundColor: '#FFF0E8',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FF6B35',
+    padding: 20,
+    alignItems: 'center',
+  },
+  inviteLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF6B35',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  inviteCode: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    letterSpacing: 6,
+    marginBottom: 6,
+  },
+  inviteHint: {
+    fontSize: 12,
+    color: '#FF6B35',
+  },
   searchInput: {
     backgroundColor: '#f5f5f5',
     borderRadius: 12,
@@ -619,94 +700,6 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     paddingVertical: 20,
-  },
-  // Step 3
-  reviewCard: {
-    backgroundColor: '#f8f8f8',
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  reviewSessionName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1a1a1a',
-    marginBottom: 6,
-  },
-  reviewDetail: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  reviewTagRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  reviewTag: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  reviewTagText: {
-    fontSize: 13,
-    color: '#555',
-    fontWeight: '500',
-  },
-  editTag: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  editTagText: {
-    fontSize: 13,
-    color: '#555',
-    fontWeight: '600',
-  },
-  participantsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#999',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-  },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 12,
-  },
-  participantAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#607D8B',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  participantAvatarText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  participantName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1a1a1a',
-  },
-  participantStatus: {
-    fontSize: 12,
-    color: '#888',
-  },
-  reviewNote: {
-    fontSize: 13,
-    color: '#aaa',
-    marginTop: 16,
-    textAlign: 'center',
   },
   // Bottom
   bottomBar: {
