@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "api:contract:generate": "node scripts/generate-openapi.cjs",
-    "api:contract:check": "node scripts/generate-openapi.cjs --check"
+    "api:contract:check": "node scripts/generate-openapi.cjs --check",
+    "e2e:selenium": "npm -w @bitebuddy/e2e-selenium run test",
+    "e2e:selenium:headed": "npm -w @bitebuddy/e2e-selenium run test:headed",
+    "e2e:seed": "npm -w @bitebuddy/e2e-selenium run seed",
+    "e2e:selenium:auth": "npm -w @bitebuddy/e2e-selenium run e2e:auth",
+    "e2e:selenium:auth:headed": "npm -w @bitebuddy/e2e-selenium run test:auth:headed"
   },
   "workspaces": [
     "apps/*",
