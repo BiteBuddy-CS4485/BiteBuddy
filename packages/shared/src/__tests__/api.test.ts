@@ -31,7 +31,7 @@ describe('CUISINE_CATEGORIES', () => {
 
   it('contains the expected common cuisine keys', () => {
     const keys = new Set(CUISINE_CATEGORIES.map(c => c.key));
-    for (const expected of ['italian', 'mexican', 'japanese', 'chinese', 'american']) {
+    for (const expected of ['italian', 'mexican', 'japanese', 'chinese', 'american'] as const) {
       expect(keys.has(expected)).toBe(true);
     }
   });
