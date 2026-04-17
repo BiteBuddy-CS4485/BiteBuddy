@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "api:contract:generate": "node scripts/generate-openapi.cjs",
-    "api:contract:check": "node scripts/generate-openapi.cjs --check"
+    "api:contract:check": "node scripts/generate-openapi.cjs --check",
+    "test": "npm -w @bitebuddy/shared run test && npm -w @bitebuddy/api run test"
   },
   "workspaces": [
     "apps/*",
