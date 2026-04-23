@@ -2,10 +2,10 @@
 ## BiteBuddy
 ### Group Restaurant Matching App
 
-Version 1.1 - Weekly Progress Aligned Spec  
+Version 1.2 - Weekly Progress Aligned Spec  
 Sprint history and delivery plan through May 1, 2026  
 Stack: Expo/React Native, Next.js Route Handlers, Supabase Postgres/Auth/Realtime, Google Places API  
-Last Updated: April 3, 2026
+Last Updated: April 23, 2026
 
 Read this entire specification before writing code. This document is the source of truth for coding agents working in this repository.
 
@@ -16,8 +16,8 @@ If the spec and implementation conflict, preserve user-visible behavior and add 
 2. Tech Stack
 3. Project File Structure
 4. Data Models
-5. Sprint History Through March 13, 2026
-6. Remaining Sprint Plan: March 14 - May 1, 2026
+5. Sprint History Through April 23, 2026
+6. Sprint Plan: March 14 - May 1, 2026 (Actual + Remaining)
 7. Delivery Priorities for Remaining Sprints
 8. API Reference (Full)
 9. UI/UX Guidelines
@@ -76,6 +76,10 @@ Use and extend the current monorepo layout.
 
 ```text
 bitebuddy/
+  .github/
+    workflows/
+      api-contract.yml          # OpenAPI contract generation and sync check
+      tests.yml                 # Vitest unit test runner
   apps/
     api/
       src/
@@ -85,20 +89,56 @@ bitebuddy/
             profile/route.ts
             friends/{route,search,request,respond,requests,requests/sent}/route.ts
             restaurants/discover/route.ts
-            sessions/{route,recent-matches,[id], [id]/{invite,join,start,swipe,restaurants,results}}/route.ts
+            sessions/
+              route.ts
+              recent-matches/route.ts
+              join-by-code/route.ts    # Join session via 6-char invite code
+              [id]/
+                route.ts
+                invite/route.ts
+                join/route.ts
+                start/route.ts
+                swipe/route.ts
+                restaurants/route.ts
+                results/route.ts
+                cancel/route.ts        # Host cancels a session
+                leave/route.ts         # Member leaves a session
+                discover/route.ts      # Per-session location-aware restaurant discovery
             health/route.ts
             docs/route.ts
-        lib/{auth.ts,supabase.ts,yelp.ts}
+        lib/
+          auth.ts
+          supabase.ts
+          yelp.ts
+          __tests__/yelp.test.ts       # Vitest unit tests for Places adapter
         middleware.ts
       public/openapi.json
       next.config.ts
       vercel.json
+      vitest.config.ts
     mobile/
       app/
-        (auth)/{login,signup,profile-setup}.tsx
-        (tabs)/{index,friends,history,profile}.tsx
-        session/create.tsx
-        session/[id]/{lobby,swipe,results}.tsx
+        (auth)/
+          _layout.tsx
+          index.tsx              # Auth landing/splash screen
+          login.tsx
+          signup.tsx
+          profile-setup.tsx
+          forgot-password.tsx    # Request password reset email
+          reset-password.tsx     # Deep-link handler for password reset
+        (tabs)/
+          _layout.tsx
+          index.tsx              # Home: active/waiting sessions + join by invite code
+          friends.tsx
+          history.tsx            # Completed/cancelled session history
+          profile.tsx
+          sessions.tsx           # Sessions tab (active sessions view)
+        session/
+          create.tsx
+          [id]/
+            lobby.tsx            # Pre-start lobby with MapView for member locations
+            swipe.tsx
+            results.tsx
         _layout.tsx
       components/{SessionCard,FriendCard,RestaurantCard,CompactRestaurantCard,MatchModal}.tsx
       contexts/AuthContext.tsx
@@ -108,13 +148,35 @@ bitebuddy/
     docs/api-contract/{README.md,openapi.json}
   packages/
     shared/
-      src/{database.ts,api.ts,index.ts}
+      src/
+        database.ts
+        api.ts
+        geolocation.ts          # calculateCentroid, calculateDistance utilities
+        index.ts
+        __tests__/
+          api.test.ts
+          geolocation.test.ts   # Vitest unit tests for geolocation utilities
+      vitest.config.ts
   scripts/
     generate-openapi.cjs
     openapi/contract-definitions.cjs
   supabase/
-    migrations/001..007.sql
+    migrations/
+      001_create_profiles.sql
+      002_create_friendships.sql
+      003_create_sessions.sql
+      004_create_swipes_matches.sql
+      005_match_detection.sql
+      006_enable_realtime.sql
+      007_create_avatars_bucket.sql
+      008_add_invite_code.sql           # invite_code column + generate_invite_code()
+      009_add_cancelled_status.sql      # 'cancelled' added to sessions.status check
+      010_invite_lookup_and_leave_policy.sql
+      011_complete_session_function.sql
+      012_store_user_location_function.sql  # Per-user location storage for centroid
+      013_performance_indexes.sql           # Partial index on liked swipes; user_id index on session_members
   Weekly Progress/
+  BiteBuddy_Scalability_Audit.pdf   # Performance analysis and index justification
   README.md
   COMMANDS.md
   CLAUDE.md
@@ -149,12 +211,13 @@ unique(requester_id, addressee_id)
 id uuid primary key default uuid_generate_v4()
 created_by uuid not null references profiles(id)
 name text not null
-status text not null default 'waiting' check (status in ('waiting','active','completed'))
+status text not null default 'waiting' check (status in ('waiting','active','completed','cancelled'))
 latitude float8 not null
 longitude float8 not null
 radius_meters int not null default 5000
 price_filter text[] null
 category_filter text null
+invite_code text unique          -- 6-character alphanumeric code, generated on create
 created_at timestamptz not null default now()
 updated_at timestamptz not null default now()
 ```
@@ -209,13 +272,20 @@ matched_at timestamptz not null default now()
 - `handle_new_user()`: auto-creates profile row after `auth.users` insert.
 - `set_updated_at()`: common `updated_at` trigger function.
 - `check_for_match()`: after `swipes` insert, inserts `matches` when `like_count >= member_count`.
+- `generate_invite_code()`: returns a random 6-character alphanumeric string; called on session create.
+- `store_user_location(lat, lng)`: stores calling user's last known location; used by the lobby to compute group centroid for restaurant discovery.
+
+### 4.10 Performance Indexes (migration 013)
+Two targeted indexes added to address hot paths identified in the scalability audit:
+- `swipes_match_check_idx` — partial index on `swipes(session_id, restaurant_id) WHERE liked = true`. Speeds up the `check_for_match()` trigger, which counts liked swipes per restaurant on every swipe insert.
+- `session_members_user_id_idx` — index on `session_members(user_id)`. Allows RLS policy subqueries of the form `session_id IN (SELECT session_id FROM session_members WHERE user_id = auth.uid())` to use an index instead of a full scan. The existing unique index leads with `session_id`, so it could not serve user-id-only lookups.
 
 ### 4.9 Realtime and Storage
 - Realtime publication includes `sessions`, `session_members`, `swipes`, `matches`.
 - Public `avatars` storage bucket with per-user write/update/delete policies.
 
-## 5. Sprint History Through March 13, 2026
-Goal: capture what actually happened so far based on the weekly reports, meeting minutes, and current repository state.
+## 5. Sprint History Through April 23, 2026
+Goal: capture what actually happened based on weekly reports, meeting minutes, and current repository state.
 
 ### 5.1 Completed Timeline
 | Sprint / Week | Dates | What Actually Happened | Tangible Deliverables |
@@ -225,123 +295,97 @@ Goal: capture what actually happened so far based on the weekly reports, meeting
 | Hardening Sprint / Week 3 | Feb 23 - Feb 27, 2026 | Infrastructure and environment issues were cleaned up. Google OAuth and callback configuration were fixed, GCP/Vercel permissions were stabilized, API-contract automation was introduced, the mobile app was connected to the backend, and the first architecture and wireframe artifacts were produced. | OAuth fixes, Google Places integration progress, OpenAPI automation, distance/midpoint filtering work, working Expo-to-API connection, system architecture artifact, first wireframes. |
 | Alignment Sprint / Week 4 | Feb 27 - Mar 6, 2026 | The team focused on documentation, UI planning, and cost-awareness. The professor-requested `SPEC.md` work started, more wireframes and use-case work were completed, session/home UI implementation began, and Google Places image costs were analyzed after real billing impact was observed. | `SPEC.md` draft, use case diagram, expanded wireframes, session/home screen implementation, cost-reduction research for Google Places photo usage, mobile deployment research. |
 | Standup Sprint / Week 5 | Mar 9 - Mar 13, 2026 | Work continued without major blockers. No major scope change was recorded; the team stayed focused on the current implementation, documentation, and polish tasks already in flight. | Ongoing integration work, continued documentation, no new blockers reported. |
+| Forgot Password / Week 6 | Mar 14 - Mar 27, 2026 | Added the full forgot-password and reset-password flow. The mobile app gained two new auth screens (`forgot-password.tsx`, `reset-password.tsx`) and the auth context was updated to handle the deep-link token. | Working password-reset email flow, deep-link reset handler, updated `AuthContext`. |
+| Invite Code + Cancel/Leave + UI / Week 7 | Mar 28 - Apr 3, 2026 | Major week of feature delivery. Shareable 6-character invite codes were added to sessions so users can join without being manually invited by the host. Cancel session (host-only) and leave session (member) actions were added. The session history tab was fixed to actually show completed/cancelled sessions. A large UI overhaul touched every major screen. Several bug fixes landed for Google Places, join codes, swiping, and RLS permissions. | `invite_code` column (migration 008), `cancelled` status (migration 009), `join-by-code` API route, `cancel` and `leave` API routes, invite-code UI in lobby and home, major mobile screen redesign, history screen working. |
+| Location and Discovery / Week 8 | Apr 4 - Apr 10, 2026 | Per-session location-aware restaurant discovery was implemented. The lobby now shows a MapView with pinned member locations. A `store_user_location` DB function stores each member's last known coordinates. A new `POST /sessions/{id}/discover` route computes the group centroid from stored member locations (using `calculateCentroid` from the new `packages/shared/src/geolocation.ts` module) and searches Google Places around that midpoint. Additional RLS fixes were made for invite-code joins. | `sessions/[id]/discover` route, `geolocation.ts` shared utilities (`calculateCentroid`, `calculateDistance`), MapView in lobby, migration 012 (user location storage). |
+| Unit Testing + CI/CD / Week 9 | Apr 11 - Apr 16, 2026 | Unit tests were added for the Places adapter (`yelp.test.ts`), shared API types (`api.test.ts`), and geolocation utilities (`geolocation.test.ts`) using Vitest. A new GitHub Actions workflow (`tests.yml`) runs the test suite on every push, alongside the existing OpenAPI contract check. | Vitest test suites in `apps/api` and `packages/shared`, `tests.yml` CI workflow, CI passing on merge. |
+| Performance + Scalability / Week 10 | Apr 17 - Apr 23, 2026 | A scalability audit was completed and documented (`BiteBuddy_Scalability_Audit.pdf`). Two performance indexes were added in migration 013: a partial index on liked swipes to speed up the `check_for_match()` trigger, and a `user_id` index on `session_members` to make RLS policy subqueries index-scannable. Documentation updated with Week 8 and Week 9 progress reports. `SPEC.md` brought up to date. | Migration 013 (performance indexes), `BiteBuddy_Scalability_Audit.pdf`, updated weekly progress PDFs, updated `SPEC.md`. |
 
-### 5.2 Current Repository Snapshot
-The weekly reports line up with the code currently in this repository:
+### 5.2 Current Repository Snapshot (as of April 23, 2026)
+- Auth, profile, and friends API routes are fully implemented and deployed.
+- Session routes cover creation, join, invite (user ID list), join-by-code, start, swipe, restaurant queue, results, recent matches, cancel, and leave.
+- A per-session location-aware discovery route (`POST /sessions/{id}/discover`) computes the group centroid and queries Google Places.
+- Mobile screens cover the full core loop: auth (login, signup, forgot/reset password), profile setup, tab home with invite-code entry, friends, history (completed/cancelled), profile, session create with MapView, lobby with member location map, swipe, and results.
+- 13 Supabase migrations are in place covering all domain tables, realtime publication, avatar storage, invite codes, cancelled status, RLS policy updates, user location storage, and performance indexes.
+- Two GitHub Actions CI workflows run on every push: OpenAPI contract check and Vitest unit tests.
+- Shared geolocation utilities (`calculateCentroid`, `calculateDistance`) live in `@bitebuddy/shared` and are covered by unit tests.
 
-- Auth, profile, and friends API routes exist under `apps/api/src/app/api/auth`, `apps/api/src/app/api/profile`, and `apps/api/src/app/api/friends`.
-- Session creation, join, invite, start, swipe, restaurant queue, results, and recent match routes already exist under `apps/api/src/app/api/sessions`.
-- Mobile auth, tab navigation, session create/lobby/swipe/results screens, and reusable restaurant/match components already exist under `apps/mobile/app` and `apps/mobile/components`.
-- Supabase migrations already cover profiles, friendships, sessions, swipes, matches, realtime enablement, and avatar storage.
-- OpenAPI generation/check tooling and a GitHub Action already exist, which matches the Week 3 documentation/automation work.
+### 5.3 What Is Still Pending Before Final Demo
+- End-to-end or integration tests do not yet exist; only unit tests covering pure functions are in place.
+- Mobile beta release prep (EAS / TestFlight distribution) has not been formalized.
+- Final UI polish and empty/error states across all screens are still being finished.
+- Final demo rehearsal and documentation cleanup are planned for the last week.
 
-### 5.3 What Is Clearly Still In Progress
-- UI implementation is not yet fully caught up to the design work; the reports show wireframes and mockup work still continuing.
-- Cost controls for Google Places image usage were researched, but the optimization work is not yet presented as complete.
-- The repo has contract automation, but there are no obvious route or end-to-end tests yet.
-- Mobile beta release prep, final QA, and final demo packaging were discussed but not finished in the weekly reports.
+## 6. Sprint Plan: March 14 - May 1, 2026 (Actual + Remaining)
 
-## 6. Remaining Sprint Plan: March 14 - May 1, 2026
-Goal: spend the remaining time making the existing MVP dependable, presentable, and demo-ready rather than expanding scope too aggressively.
-
-### 6.1 Sprint 4 - Core Flow Stabilization
+### 6.1 Sprint 4 - Core Flow Stabilization ✅ COMPLETED
 Dates: March 14 - March 27, 2026
 
-Focus:
-- Stabilize the end-to-end happy path: sign in, invite/join, start session, swipe, detect match, view results/history.
-- Implement UI/UX for the matching flow from wireframes.
-- Add reset password/forgot password functionality.
-- Identify bugs across the app and create corresponding tracking tasks.
-- Explore Supabase observability dashboards, record response times and identify common queries.
+What happened:
+- Forgot password / reset password flow fully implemented (new auth screens, deep-link handler, AuthContext updates).
+- Ongoing end-to-end stabilization and bug triage continued.
 
-Expected deliverables:
-- One reliable end-to-end demo path that works on mobile and web.
-- Updated `SPEC.md` and OpenAPI artifacts that reflect the implemented flow.
-- Prioritized bug list split into must-fix before beta vs. nice-to-have polish.
+Delivered:
+- Working password-reset email flow.
+- Updated `AuthContext` with token handling for deep-link resets.
 
-### 6.2 Sprint 5 - QA, Reliability, and Deployment Prep
+### 6.2 Sprint 5 - Features, UI, and CI ✅ COMPLETED
 Dates: March 28 - April 10, 2026
 
-Focus:
-- Add automated coverage for the most important backend paths: auth, sessions, invites/join, swipes, and match-result retrieval.
-- Expand CI beyond contract generation so the repo checks basic install/build/test health before merges.
-- Standardize API error handling and frontend error messaging so demos fail gracefully instead of confusing users.
-- Decide and document the mobile beta distribution path, most likely around Expo/EAS plus TestFlight-style testing.
-- Complete the UI/UX flow in Figma/Canva and finish aligning remainig screens from wireframes.
-- Apply Google Places cost-reduction findings.
+What happened:
+- Shareable invite codes shipped: sessions now generate a 6-character code on creation; users can enter the code from the Home screen to join without a manual invite.
+- Cancel session (host) and leave session (member) actions were added and wired to new API routes.
+- History tab was fixed to correctly display completed and cancelled sessions.
+- Major UI overhaul across every core screen: auth, home, lobby, swipe, history, profile, and session create.
+- Location-aware restaurant discovery landed: lobby shows a MapView with member pins; `POST /sessions/{id}/discover` computes the group centroid and queries Google Places around it.
+- Shared geolocation utilities (`calculateCentroid`, `calculateDistance`) added to `@bitebuddy/shared`.
+- Bug fixes for Google Places calls, RLS policies on invite-code joins, and swipe edge cases.
+- CI expanded: Vitest unit tests added for the Places adapter and geolocation utilities; `tests.yml` workflow runs on every push.
 
-Expected deliverables:
-- First regression test suite for core backend flows.
-- CI workflow for contract plus at least one additional quality gate.
-- Documented beta deployment/checklist process.
-- Fewer environment/setup surprises for new teammates or graders.
+Delivered:
+- `invite_code` column (migration 008), `cancelled` status (migration 009), invite/leave/cancel API routes.
+- `sessions/[id]/discover` route and `geolocation.ts` shared module.
+- MapView in lobby, invite-code entry on Home.
+- Vitest suites in `apps/api` and `packages/shared`, `tests.yml` CI workflow.
 
-### 6.3 Sprint 6 - Beta Polish and Real-Device Validation
-Dates: April 11 - April 24, 2026
-
-Focus:
-- Run internal test sessions across multiple users/devices and log reproducible issues.
-- Polish the screens using Paola's design work: typography, spacing, colors, empty states, loading states, and clearer match/session feedback.
-- Tighten the history, profile editing, and avatar flows so the app feels complete during a live walkthrough.
-- Revisit stretch features only if the core loop is already stable.
-- Implement shareable session invite codes and links so users can join without needing to be manually added by the host.
-- Revisit the restaurant count per session to optimize match quality and reduce swipe fatigue.
-- Surface meaningful usage metrics in the app using data from the Supabase observability work.
-- Expand user profile capabilities to improve personalization.
-- Add faster in-app access to restaurant details from Yelp/Google.
-
-Stretch features only after core stability:
-- Background invite notifications.
-- Monetization strategy research and initial implementation planning.
-- Rematch, share code/link, or extra session convenience features.
-
-Expected deliverables:
-- Beta candidate build.
-- Bug-fix log from real-device testing.
-- Presentation-ready UI for the app's main screens.
-- Shareable invite link/code mechanism.
-- Update restaurant queue sizing.
-
-### 6.4 Final Delivery Window
+### 6.3 Final Delivery Window
 Dates: April 25 - May 1, 2026
 
 Focus:
-- Freeze scope except for critical bugs.
-- Rehearse the final demo from a clean environment and make sure the scripted path succeeds.
+- Freeze scope to critical bugs only.
+- Rehearse the final demo from a clean environment and confirm the scripted happy path succeeds end-to-end.
+- Polish remaining empty and error states so the demo fails gracefully rather than confusingly.
 - Clean up repo-facing documentation: README, setup instructions, API docs, architecture references, and final spec accuracy.
-- Prepare any final presentation artifacts, screenshots, and ownership summary needed for handoff.
+- Prepare final presentation artifacts, screenshots, and ownership summary needed for handoff.
 
 Expected deliverables:
-- Demo-ready build and backend deployment.
-- Finalized documentation set.
+- Demo-ready build and backend deployment confirmed stable.
+- Finalized documentation set (README, SPEC, OpenAPI).
 - Final presentation/demo assets and handoff notes.
 
-## 7. Delivery Priorities for Remaining Sprints
+## 7. Delivery Priorities for Final Week
 When time is limited, use this priority order.
 
 ### 7.1 Priority 0 - Must Be Stable Before Final Demo
-- Auth/login/signup/logout and protected-route behavior.
-- Session create/join/invite/start flow.
-- Shared restaurant queue, swipe persistence, and match detection.
-- Results/history visibility after a completed session.
-- Google Places usage guardrails so the demo does not create avoidable costs.
+- Auth/login/signup/logout and protected-route behavior. ✅ Done
+- Session create/join (by invite list or invite code)/start flow. ✅ Done
+- Shared restaurant queue, swipe persistence, and match detection. ✅ Done
+- Results/history visibility after a completed or cancelled session. ✅ Done
+- Google Places usage guardrails so the demo does not create avoidable costs. ✅ Done (photo proxy removed; direct Places calls gated per session)
+- Forgot/reset password flow. ✅ Done
+- Cancel and leave session. ✅ Done
 
-### 7.2 Priority 1 - Strongly Recommended Before Beta
-- Tests for critical API paths.
-- CI checks beyond OpenAPI artifact sync.
-- Consistent API/frontend error messaging.
-- Better mobile polish on the wireframed screens.
-- Beta/TestFlight-style release instructions and validation steps.
-- Shareable session invite code/link so any user can join without host-side manual add.
-- Supabase analytics integration using observabiliy data already collected.
-- Reconsider restaurant count per session to optimize match quality and reduce swipe fatigue.
+### 7.2 Priority 1 - Remaining Before Demo
+- Consistent API/frontend error messaging and graceful empty states (partially done; still polish needed).
+- Full end-to-end demo rehearsal from a clean install on a real device.
+- Final documentation cleanup (README, setup guide, SPEC).
 
-### 7.3 Priority 2 - Stretch Work Only After Core Stability
-- Background notifications for invites or matches.
-- Convenience features such as rematch, share links, or richer restaurant details.
-- Expand user profiles.
-- Monetization strategy research and initial implementation.
-- Faster in-app restaurant detail access from Yelp/Google.
+### 7.3 Priority 2 - Stretch Work (Only If Time Allows)
+- Background push notifications for invites or matches.
+- Supabase observability / analytics surface in-app.
+- Richer restaurant details deep-link or in-app sheet.
+- Rematch convenience feature.
+- Monetization research.
 
 ## 8. API Reference (Full)
 Base URL: `/api`  
@@ -394,12 +438,17 @@ Current envelope: success `{ "data": ... }`, failure `{ "error": "message" }`
 
 ### 8.6 Session Routes
 - `GET /sessions` (protected)
-  - Optional query: `status in {waiting,active,completed}`.
+  - Optional query: `status in {waiting,active,completed,cancelled}`.
 - `POST /sessions` (protected)
   - Body: `{ name, latitude, longitude, radius_meters?, price_filter?, category_filter? }`
-  - Success: created session (`201`).
+  - Success: created session with generated `invite_code` (`201`).
 - `GET /sessions/recent-matches` (protected)
   - Optional query: `limit` (1..50, default 10).
+- `POST /sessions/join-by-code` (protected)
+  - Body: `{ invite_code: string }`
+  - Looks up session by the 6-character code and upserts the user as a member.
+  - Success: `{ session }` (`201`).
+  - Errors: `400`, `404`.
 - `GET /sessions/{id}` (protected) -> details + members + counts.
 - `POST /sessions/{id}/invite` (protected)
   - Body: `{ user_ids: uuid[] }`
@@ -408,12 +457,22 @@ Current envelope: success `{ "data": ... }`, failure `{ "error": "message" }`
 - `POST /sessions/{id}/start` (protected)
   - Host-only; loads restaurants and flips status to `active`.
   - Errors: `400`, `401`, `403`, `404`, `502`.
+- `POST /sessions/{id}/discover` (protected)
+  - Computes group centroid from stored member locations and queries Google Places.
+  - Success: `{ restaurants: PlaceBusiness[] }`.
+  - Errors: `400`, `401`, `403`, `404`, `502`.
 - `GET /sessions/{id}/restaurants` (protected) -> session queue rows.
 - `POST /sessions/{id}/swipe` (protected)
   - Body: `{ restaurant_id, liked }`
   - Success: `{ swipe_id, is_match, match? }`.
 - `GET /sessions/{id}/results` (protected)
   - Success: `{ matches, total_restaurants, swipe_progress }`.
+- `POST /sessions/{id}/cancel` (protected)
+  - Host-only; flips session status to `cancelled`.
+  - Errors: `400`, `401`, `403`, `404`.
+- `POST /sessions/{id}/leave` (protected)
+  - Removes calling user from `session_members`.
+  - Errors: `400`, `401`, `404`.
 
 ## 9. UI/UX Guidelines
 ### 9.1 Navigation and Layout
@@ -557,4 +616,4 @@ When this spec lacks detail:
 3. Keep changes minimal and type-safe.
 4. Document assumptions inline if they affect API/data contracts.
 
-End of Specification - BiteBuddy v1.1 (Weekly Progress Aligned) - March 13, 2026
+End of Specification - BiteBuddy v1.2 (Weekly Progress Aligned) - April 23, 2026
